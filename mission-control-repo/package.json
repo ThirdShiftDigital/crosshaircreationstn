@@ -1,0 +1,9 @@
+{
+  "name": "crosshair-creations-site",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@netlify/functions": "^2",
+    "@netlify/database": "^1"
+  }
+}

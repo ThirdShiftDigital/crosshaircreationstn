@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Mission Control | Crosshair Creations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky-deep: #0b1020; --sky-mid: #111a2e; --sky-line: #22304c;
+    --horizon: #f0a84b; --horizon-hi: #ffc678; --hud: #6fd9c0;
+    --ink: #edf1f8; --ink-dim: #a3aec4; --ink-faint: #66738f;
+    --danger: #ff6b6b; --ok: #6fd9c0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--sky-deep); color: var(--ink); font-family: 'Inter', sans-serif; line-height: 1.5; }
+  h1, h2, h3 { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.03em; margin: 0; }
+  .tele { font-family: 'Space Mono', monospace; font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+  input, textarea, select {
+    background: var(--sky-mid); border: 1px solid var(--sky-line); color: var(--ink);
+    border-radius: 4px; padding: 0.55rem 0.7rem; font-family: 'Inter', sans-serif; font-size: 0.9rem; width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--horizon); }
+  button {
+    font-family: 'Space Mono', monospace; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
+    border-radius: 4px; padding: 0.6rem 1.1rem; border: 1px solid var(--sky-line); background: var(--sky-mid);
+    color: var(--ink); cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  button:hover { border-color: var(--horizon); }
+  button.primary { background: linear-gradient(180deg, var(--horizon-hi), var(--horizon)); color: var(--sky-deep); border: none; font-weight: 700; }
+  button.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+
+  /* ---- login ---- */
+  #login-screen { min-height: 100svh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+  .login-box { max-width: 340px; width: 100%; text-align: center; }
+  .login-box h1 { font-size: 2.4rem; margin-bottom: 0.3rem; }
+  .login-box p { color: var(--ink-dim); margin-bottom: 1.6rem; font-size: 0.92rem; }
+  .login-box input { margin-bottom: 0.9rem; text-align: center; }
+  .login-box button { width: 100%; padding: 0.8rem; }
+  .login-error { color: var(--danger); font-size: 0.85rem; margin-top: 0.8rem; min-height: 1.2em; }
+
+  /* ---- app shell ---- */
+  #app { display: none; }
+  header.top { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid var(--sky-line); flex-wrap: wrap; gap: 0.75rem; }
+  header.top h1 { font-size: 1.6rem; }
+  .tabs { display: flex; gap: 0.4rem; padding: 1rem 1.5rem 0; flex-wrap: wrap; }
+  .tab-btn { background: transparent; }
+  .tab-btn.active { background: var(--sky-mid); border-color: var(--horizon); color: var(--horizon); }
+  main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card { background: var(--sky-mid); border: 1px solid var(--sky-line); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+  .card h3 { font-size: 1.2rem; margin-bottom: 0.9rem; }
+  .field-row { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; align-items: center; margin-bottom: 0.6rem; }
+  .field-row label { font-size: 0.85rem; color: var(--ink-dim); }
+  .field-row input { max-width: 140px; }
+
+  .list-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; padding: 0.8rem 0; border-top: 1px solid var(--sky-line); }
+  .list-item:first-child { border-top: none; }
+  .list-item .meta { color: var(--ink-faint); font-size: 0.8rem; margin-top: 0.2rem; }
+  .list-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .status-pill { font-family: 'Space Mono', monospace; font-size: 0.7rem; text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 3px; border: 1px solid var(--sky-line); }
+  .status-pending, .status-new { color: var(--horizon); border-color: var(--horizon); }
+  .status-confirmed, .status-contacted, .status-quoted { color: var(--hud); border-color: var(--hud); }
+  .status-completed, .status-won { color: #8fd68f; border-color: #8fd68f; }
+  .status-cancelled, .status-lost { color: var(--danger); border-color: var(--danger); }
+
+  .add-form { display: grid; gap: 0.6rem; margin-bottom: 1.2rem; }
+  .add-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  @media (max-width: 560px) { .add-form .row2 { grid-template-columns: 1fr; } }
+
+  .task-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0; border-top: 1px solid var(--sky-line); }
+  .task-row:first-child { border-top: none; }
+  .task-row.done span { text-decoration: line-through; color: var(--ink-faint); }
+  .task-row input[type=checkbox] { width: auto; }
+
+  .toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: var(--sky-mid); border: 1px solid var(--hud); color: var(--ink); padding: 0.7rem 1.2rem; border-radius: 6px; font-family: 'Space Mono', monospace; font-size: 0.8rem; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 50; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>MISSION CONTROL</h1>
+    <p class="tele">Crosshair Creations — Private Access</p>
+    <input type="password" id="password-input" placeholder="Password" autocomplete="current-password">
+    <button class="primary" id="login-btn">Enter</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app">
+  <header class="top">
+    <h1>MISSION CONTROL</h1>
+    <button id="logout-btn">Log Out</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-panel="content">Pricing &amp; Content</button>
+    <button class="tab-btn" data-panel="bookings">Bookings</button>
+    <button class="tab-btn" data-panel="leads">Leads</button>
+    <button class="tab-btn" data-panel="tasks">Tasks</button>
+    <button class="tab-btn" data-panel="notes">Notes</button>
+  </nav>
+
+  <main>
+    <!-- CONTENT / PRICING -->
+    <section class="panel active" id="panel-content">
+      <div class="card">
+        <h3>Real Estate Photography</h3>
+        <div class="field-row"><label>Essentials</label><input data-key="re_essentials_price"></div>
+        <div class="field-row"><label>Plus</label><input data-key="re_plus_price"></div>
+        <div class="field-row"><label>Premium</label><input data-key="re_premium_price"></div>
+      </div>
+      <div class="card">
+        <h3>Drone Services</h3>
+        <div class="field-row"><label>Basic</label><input data-key="drone_basic_price"></div>
+        <div class="field-row"><label>Standard</label><input data-key="drone_standard_price"></div>
+        <div class="field-row"><label>Commercial</label><input data-key="drone_commercial_price"></div>
+      </div>
+      <div class="card">
+        <h3>Construction Progress</h3>
+        <div class="field-row"><label>Monthly Visit</label><input data-key="construction_monthly_price"></div>
+        <div class="field-row"><label>Bi-Weekly Package</label><input data-key="construction_biweekly_price"></div>
+        <div class="field-row"><label>Weekly Package</label><input data-key="construction_weekly_price"></div>
+      </div>
+      <div class="card">
+        <h3>Search &amp; Recovery</h3>
+        <div class="field-row"><label>Deer Recovery — Daylight</label><input data-key="recovery_deer_day_price"></div>
+        <div class="field-row"><label>Thermal Pet Recovery</label><input data-key="recovery_pet_price"></div>
+        <div class="field-row"><label>Deer Recovery — After Hours</label><input data-key="recovery_deer_night_price"></div>
+        <div class="field-row"><label>Large Property Recovery</label><input data-key="recovery_large_property_price"></div>
+        <div class="field-row"><label>Extended Thermal Pet Recovery</label><input data-key="recovery_extended_thermal_price"></div>
+      </div>
+      <div class="card">
+        <h3>Business Photography</h3>
+        <div class="field-row"><label>Essentials</label><input data-key="business_essentials_price"></div>
+        <div class="field-row"><label>Growth</label><input data-key="business_growth_price"></div>
+        <div class="field-row"><label>Premium</label><input data-key="business_premium_price"></div>
+      </div>
+      <div class="card">
+        <h3>Contact &amp; Site Text</h3>
+        <div class="field-row"><label>Phone</label><input data-key="contact_phone"></div>
+        <div class="field-row"><label>Email</label><input data-key="contact_email"></div>
+        <label class="tele" style="display:block;margin-top:0.8rem;margin-bottom:0.4rem;">Hero Subtext</label>
+        <textarea data-key="hero_subtext" rows="3"></textarea>
+      </div>
+      <button class="primary" id="save-content-btn">Save Changes to Live Site</button>
+    </section>
+
+    <!-- BOOKINGS -->
+    <section class="panel" id="panel-bookings">
+      <div class="card">
+        <h3>Add Booking</h3>
+        <div class="add-form">
+          <input id="bk-name" placeholder="Customer name">
+          <div class="row2">
+            <input id="bk-service" placeholder="Service">
+            <input id="bk-contact" placeholder="Phone / email">
+          </div>
+          <div class="row2">
+            <input id="bk-date" type="date">
+            <input id="bk-time" placeholder="Time (e.g. 2:00 PM)">
+          </div>
+          <div class="row2">
+            <select id="bk-status">
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            <input id="bk-price" placeholder="Price">
+          </div>
+          <textarea id="bk-notes" placeholder="Notes" rows="2"></textarea>
+          <button class="primary" id="add-booking-btn">Add Booking</button>
+        </div>
+      </div>
+      <div class="card"><div id="bookings-list"></div></div>
+    </section>
+
+    <!-- LEADS -->
+    <section class="panel" id="panel-leads">
+      <div class="card">
+        <h3>Add Lead</h3>
+        <div class="add-form">
+          <input id="ld-name" placeholder="Name">
+          <div class="row2">
+            <input id="ld-contact" placeholder="Phone / email">
+            <input id="ld-interest" placeholder="Interested in...">
+          </div>
+          <select id="ld-status">
+            <option value="new">New</option>
+            <option value="contacted">Contacted</option>
+            <option value="quoted">Quoted</option>
+            <option value="won">Won</option>
+            <option value="lost">Lost</option>
+          </select>
+          <textarea id="ld-notes" placeholder="Notes" rows="2"></textarea>
+          <button class="primary" id="add-lead-btn">Add Lead</button>
+        </div>
+      </div>
+      <div class="card"><div id="leads-list"></div></div>
+    </section>
+
+    <!-- TASKS -->
+    <section class="panel" id="panel-tasks">
+      <div class="card">
+        <div class="add-form" style="grid-template-columns: 1fr auto; display:grid;">
+          <input id="tk-title" placeholder="New task...">
+          <button class="primary" id="add-task-btn">Add</button>
+        </div>
+        <div id="tasks-list"></div>
+      </div>
+    </section>
+
+    <!-- NOTES -->
+    <section class="panel" id="panel-notes">
+      <div class="card">
+        <div class="add-form">
+          <textarea id="nt-content" placeholder="Write a note..." rows="3"></textarea>
+          <button class="primary" id="add-note-btn">Add Note</button>
+        </div>
+        <div id="notes-list"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/api";
+let sessionOK = false;
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { ...opts, headers: { 'content-type': 'application/json', ...(opts.headers||{}) }, credentials: 'same-origin' });
+  if (res.status === 401) { showLogin(); throw new Error('unauthorized'); }
+  return res.json();
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadAll();
+}
+
+document.getElementById('login-btn').addEventListener('click', doLogin);
+document.getElementById('password-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+async function doLogin() {
+  const password = document.getElementById('password-input').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  try {
+    const res = await fetch(API + '/auth/login', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ password }), credentials: 'same-origin' });
+    if (res.ok) { showApp(); } else { errEl.textContent = 'Incorrect password.'; }
+  } catch (e) { errEl.textContent = 'Something went wrong. Try again.'; }
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch(API + '/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  showLogin();
+});
+
+// Tabs
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.panel).classList.add('active');
+  });
+});
+
+// ---- Content / Pricing ----
+async function loadContent() {
+  const data = await api('/content');
+  document.querySelectorAll('[data-key]').forEach(el => {
+    if (data[el.dataset.key] !== undefined) el.value = data[el.dataset.key];
+  });
+}
+document.getElementById('save-content-btn').addEventListener('click', async () => {
+  const payload = {};
+  document.querySelectorAll('[data-key]').forEach(el => payload[el.dataset.key] = el.value);
+  await api('/content', { method: 'PUT', body: JSON.stringify(payload) });
+  toast('Saved — live site updated');
+});
+
+// ---- Bookings ----
+async function loadBookings() {
+  const rows = await api('/bookings');
+  const el = document.getElementById('bookings-list');
+  el.innerHTML = rows.length ? '' : '<p class="tele">No bookings yet.</p>';
+  rows.forEach(b => {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div>
+        <strong>${esc(b.customer_name)}</strong> — ${esc(b.service||'')}
+        <div class="meta">${esc(b.scheduled_date||'')} ${esc(b.scheduled_time||'')} · ${esc(b.contact||'')} ${b.price ? '· '+esc(b.price) : ''}</div>
+        ${b.notes ? `<div class="meta">${esc(b.notes)}</div>` : ''}
+      </div>
+      <div class="list-actions">
+        <span class="status-pill status-${b.status}">${b.status}</span>
+        <button data-id="${b.id}" class="del-booking danger">Delete</button>
+      </div>`;
+    el.appendChild(div);
+  });
+  el.querySelectorAll('.del-booking').forEach(btn => btn.addEventListener('click', async () => {
+    await api('/bookings?id=' + btn.dataset.id, { method: 'DELETE' });
+    loadBookings();
+  }));
+}
+document.getElementById('add-booking-btn').addEventListener('click', async () => {
+  const name = document.getElementById('bk-name').value.trim();
+  if (!name) return toast('Customer name required');
+  await api('/bookings', { method: 'POST', body: JSON.stringify({
+    customer_name: name,
+    service: document.getElementById('bk-service').value,
+    contact: document.getElementById('bk-contact').value,
+    scheduled_date: document.getElementById('bk-date').value,
+    scheduled_time: document.getElementById('bk-time').value,
+    status: document.getElementById('bk-status').value,
+    price: document.getElementById('bk-price').value,
+    notes: document.getElementById('bk-notes').value,
+  })});
+  ['bk-name','bk-service','bk-contact','bk-date','bk-time','bk-price','bk-notes'].forEach(id => document.getElementById(id).value = '');
+  loadBookings();
+  toast('Booking added');
+});
+
+// ---- Leads ----
+async function loadLeads() {
+  const rows = await api('/leads');
+  const el = document.getElementById('leads-list');
+  el.innerHTML = rows.length ? '' : '<p class="tele">No leads yet.</p>';
+  rows.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div>
+        <strong>${esc(l.name)}</strong>
+        <div class="meta">${esc(l.contact||'')} ${l.interest ? '· '+esc(l.interest) : ''}</div>
+        ${l.notes ? `<div class="meta">${esc(l.notes)}</div>` : ''}
+      </div>
+      <div class="list-actions">
+        <span class="status-pill status-${l.status}">${l.status}</span>
+        <button data-id="${l.id}" class="del-lead danger">Delete</button>
+      </div>`;
+    el.appendChild(div);
+  });
+  el.querySelectorAll('.del-lead').forEach(btn => btn.addEventListener('click', async () => {
+    await api('/leads?id=' + btn.dataset.id, { method: 'DELETE' });
+    loadLeads();
+  }));
+}
+document.getElementById('add-lead-btn').addEventListener('click', async () => {
+  const name = document.getElementById('ld-name').value.trim();
+  if (!name) return toast('Name required');
+  await api('/leads', { method: 'POST', body: JSON.stringify({
+    name,
+    contact: document.getElementById('ld-contact').value,
+    interest: document.getElementById('ld-interest').value,
+    status: document.getElementById('ld-status').value,
+    notes: document.getElementById('ld-notes').value,
+  })});
+  ['ld-name','ld-contact','ld-interest','ld-notes'].forEach(id => document.getElementById(id).value = '');
+  loadLeads();
+  toast('Lead added');
+});
+
+// ---- Tasks ----
+async function loadTasks() {
+  const rows = await api('/tasks');
+  const el = document.getElementById('tasks-list');
+  el.innerHTML = rows.length ? '' : '<p class="tele">No tasks yet.</p>';
+  rows.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'task-row' + (t.done ? ' done' : '');
+    div.innerHTML = `
+      <input type="checkbox" ${t.done ? 'checked' : ''} data-id="${t.id}" class="task-check">
+      <span style="flex:1;">${esc(t.title)}</span>
+      <button data-id="${t.id}" class="del-task danger">Delete</button>`;
+    el.appendChild(div);
+  });
+  el.querySelectorAll('.task-check').forEach(cb => cb.addEventListener('change', async () => {
+    await api('/tasks?id=' + cb.dataset.id, { method: 'PUT', body: JSON.stringify({ title: cb.parentElement.querySelector('span').textContent, done: cb.checked }) });
+    loadTasks();
+  }));
+  el.querySelectorAll('.del-task').forEach(btn => btn.addEventListener('click', async () => {
+    await api('/tasks?id=' + btn.dataset.id, { method: 'DELETE' });
+    loadTasks();
+  }));
+}
+document.getElementById('add-task-btn').addEventListener('click', async () => {
+  const title = document.getElementById('tk-title').value.trim();
+  if (!title) return;
+  await api('/tasks', { method: 'POST', body: JSON.stringify({ title }) });
+  document.getElementById('tk-title').value = '';
+  loadTasks();
+});
+
+// ---- Notes ----
+async function loadNotes() {
+  const rows = await api('/notes');
+  const el = document.getElementById('notes-list');
+  el.innerHTML = rows.length ? '' : '<p class="tele">No notes yet.</p>';
+  rows.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div>${esc(n.content)}</div>
+      <div class="list-actions">
+        <button data-id="${n.id}" class="del-note danger">Delete</button>
+      </div>`;
+    el.appendChild(div);
+  });
+  el.querySelectorAll('.del-note').forEach(btn => btn.addEventListener('click', async () => {
+    await api('/notes?id=' + btn.dataset.id, { method: 'DELETE' });
+    loadNotes();
+  }));
+}
+document.getElementById('add-note-btn').addEventListener('click', async () => {
+  const content = document.getElementById('nt-content').value.trim();
+  if (!content) return;
+  await api('/notes', { method: 'POST', body: JSON.stringify({ content }) });
+  document.getElementById('nt-content').value = '';
+  loadNotes();
+});
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function loadAll() {
+  loadContent();
+  loadBookings();
+  loadLeads();
+  loadTasks();
+  loadNotes();
+}
+
+// Check session on load
+fetch(API + '/auth/check', { credentials: 'same-origin' })
+  .then(r => r.json())
+  .then(d => d.authenticated ? showApp() : showLogin())
+  .catch(() => showLogin());
+</script>
+
+</body>
+</html>
