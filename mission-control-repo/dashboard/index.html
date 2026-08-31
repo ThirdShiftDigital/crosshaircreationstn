@@ -73,6 +73,11 @@
   .add-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
   @media (max-width: 560px) { .add-form .row2 { grid-template-columns: 1fr; } }
 
+  .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.5rem; font-size: 0.85rem; color: var(--ink-dim); }
+  .perm-grid label { display: flex; align-items: center; gap: 0.4rem; }
+  .perm-grid input { width: auto; }
+  .owner-badge { font-family: 'Space Mono', monospace; font-size: 0.7rem; text-transform: uppercase; color: var(--horizon); border: 1px solid var(--horizon); padding: 0.15rem 0.5rem; border-radius: 3px; }
+
   .task-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0; border-top: 1px solid var(--sky-line); }
   .task-row:first-child { border-top: none; }
   .task-row.done span { text-decoration: line-through; color: var(--ink-faint); }
@@ -89,6 +94,7 @@
   <div class="login-box">
     <h1>MISSION CONTROL</h1>
     <p class="tele">Crosshair Creations — Private Access</p>
+    <input type="email" id="email-input" placeholder="Email" autocomplete="username" style="margin-bottom:0.7rem;">
     <input type="password" id="password-input" placeholder="Password" autocomplete="current-password">
     <button class="primary" id="login-btn">Enter</button>
     <div class="login-error" id="login-error"></div>
@@ -99,7 +105,10 @@
 <div id="app">
   <header class="top">
     <h1>MISSION CONTROL</h1>
-    <button id="logout-btn">Log Out</button>
+    <div style="display:flex; align-items:center; gap:1rem;">
+      <span class="tele" id="welcome-name"></span>
+      <button id="logout-btn">Log Out</button>
+    </div>
   </header>
 
   <nav class="tabs">
@@ -109,6 +118,7 @@
     <button class="tab-btn" data-panel="tasks">Tasks</button>
     <button class="tab-btn" data-panel="notes">Notes</button>
     <button class="tab-btn" data-panel="square">Square Bookings</button>
+    <button class="tab-btn" data-panel="team">Team Access</button>
   </nav>
 
   <main>
@@ -244,6 +254,31 @@
         <div id="square-list"></div>
       </div>
     </section>
+
+    <!-- TEAM ACCESS -->
+    <section class="panel" id="panel-team">
+      <div class="card">
+        <h3>Add Team Member</h3>
+        <div class="add-form">
+          <div class="row2">
+            <input id="tm-name" placeholder="Name">
+            <input id="tm-email" type="email" placeholder="Email">
+          </div>
+          <input id="tm-password" type="password" placeholder="Password (min. 6 characters)">
+          <div class="perm-grid">
+            <label><input type="checkbox" class="tm-perm" value="can_edit_content"> Pricing &amp; Content</label>
+            <label><input type="checkbox" class="tm-perm" value="can_edit_bookings" checked> Bookings</label>
+            <label><input type="checkbox" class="tm-perm" value="can_edit_leads" checked> Leads</label>
+            <label><input type="checkbox" class="tm-perm" value="can_edit_tasks" checked> Tasks</label>
+            <label><input type="checkbox" class="tm-perm" value="can_edit_notes" checked> Notes</label>
+            <label><input type="checkbox" class="tm-perm" value="can_view_square" checked> Square Bookings</label>
+            <label><input type="checkbox" class="tm-perm" value="can_manage_team"> Team Access</label>
+          </div>
+          <button class="primary" id="add-team-btn">Add Team Member</button>
+        </div>
+      </div>
+      <div class="card"><div id="team-list"></div></div>
+    </section>
   </main>
 </div>
 
@@ -266,31 +301,59 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+let currentUser = null;
+
 function showLogin() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
 }
-function showApp() {
+function showApp(user) {
+  currentUser = user;
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  applyPermissions();
   loadAll();
+}
+
+function applyPermissions() {
+  if (!currentUser) return;
+  const tabPerm = {
+    content: 'can_edit_content', bookings: 'can_edit_bookings', leads: 'can_edit_leads',
+    tasks: 'can_edit_tasks', notes: 'can_edit_notes', square: 'can_view_square', team: 'can_manage_team',
+  };
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const perm = tabPerm[btn.dataset.panel];
+    const allowed = currentUser.is_owner || currentUser[perm];
+    btn.style.display = allowed ? '' : 'none';
+  });
+  // Activate the first visible tab if the currently active one just got hidden
+  const activeBtn = document.querySelector('.tab-btn.active');
+  if (!activeBtn || activeBtn.style.display === 'none') {
+    const firstVisible = document.querySelector('.tab-btn:not([style*="display: none"])');
+    if (firstVisible) firstVisible.click();
+  }
+  document.getElementById('welcome-name').textContent = currentUser.name || currentUser.email;
 }
 
 document.getElementById('login-btn').addEventListener('click', doLogin);
 document.getElementById('password-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('email-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 async function doLogin() {
+  const email = document.getElementById('email-input').value.trim();
   const password = document.getElementById('password-input').value;
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
   try {
-    const res = await fetch(API + '/auth/login', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ password }), credentials: 'same-origin' });
-    if (res.ok) { showApp(); } else { errEl.textContent = 'Incorrect password.'; }
+    const res = await fetch(API + '/auth/login', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ email, password }), credentials: 'same-origin' });
+    const data = await res.json();
+    if (res.ok) { showApp(data.user); } else { errEl.textContent = data.error || 'Incorrect email or password.'; }
   } catch (e) { errEl.textContent = 'Something went wrong. Try again.'; }
 }
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
   await fetch(API + '/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  currentUser = null;
   showLogin();
 });
 
@@ -506,6 +569,50 @@ async function loadSquare() {
 }
 document.getElementById('refresh-square-btn').addEventListener('click', loadSquare);
 
+// ---- Team Access ----
+const PERM_LABELS = {
+  can_edit_content: 'Pricing & Content', can_edit_bookings: 'Bookings', can_edit_leads: 'Leads',
+  can_edit_tasks: 'Tasks', can_edit_notes: 'Notes', can_view_square: 'Square Bookings', can_manage_team: 'Team Access',
+};
+async function loadTeam() {
+  if (!currentUser || !(currentUser.is_owner || currentUser.can_manage_team)) return;
+  const rows = await api('/team');
+  const el = document.getElementById('team-list');
+  el.innerHTML = '';
+  rows.forEach(u => {
+    const granted = Object.keys(PERM_LABELS).filter(k => u[k]).map(k => PERM_LABELS[k]);
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <div>
+        <strong>${esc(u.name)}</strong> ${u.is_owner ? '<span class="owner-badge">Owner</span>' : ''}
+        <div class="meta">${esc(u.email)}</div>
+        <div class="meta">${granted.length ? esc(granted.join(', ')) : 'No permissions granted'}</div>
+      </div>
+      ${u.is_owner ? '' : `<div class="list-actions"><button data-id="${u.id}" class="del-team danger">Remove</button></div>`}
+    `;
+    el.appendChild(div);
+  });
+  el.querySelectorAll('.del-team').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('Remove this person\\'s access?')) return;
+    await api('/team?id=' + btn.dataset.id, { method: 'DELETE' });
+    loadTeam();
+  }));
+}
+document.getElementById('add-team-btn').addEventListener('click', async () => {
+  const name = document.getElementById('tm-name').value.trim();
+  const email = document.getElementById('tm-email').value.trim();
+  const password = document.getElementById('tm-password').value;
+  if (!name || !email || password.length < 6) return toast('Name, email, and a 6+ character password are required');
+  const payload = { name, email, password };
+  document.querySelectorAll('.tm-perm').forEach(cb => payload[cb.value] = cb.checked);
+  const res = await api('/team', { method: 'POST', body: JSON.stringify(payload) });
+  if (res.error) return toast(res.error);
+  ['tm-name','tm-email','tm-password'].forEach(id => document.getElementById(id).value = '');
+  loadTeam();
+  toast('Team member added');
+});
+
 function loadAll() {
   loadContent();
   loadBookings();
@@ -513,12 +620,13 @@ function loadAll() {
   loadTasks();
   loadNotes();
   loadSquare();
+  loadTeam();
 }
 
 // Check session on load
 fetch(API + '/auth/check', { credentials: 'same-origin' })
   .then(r => r.json())
-  .then(d => d.authenticated ? showApp() : showLogin())
+  .then(d => d.authenticated ? showApp(d.user) : showLogin())
   .catch(() => showLogin());
 </script>
 

@@ -1,9 +1,11 @@
 import type { Context, Config } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
-import { isAuthenticated, unauthorized } from "./_shared/session.mts";
+import { getSessionUser, unauthorized, forbidden } from "./_shared/session.mts";
 
 export default async (req: Request, context: Context) => {
-  if (!(await isAuthenticated(req))) return unauthorized();
+  const user = await getSessionUser(req);
+  if (!user) return unauthorized();
+  if (!user.can_edit_tasks) return forbidden();
   const db = getDatabase();
   const url = new URL(req.url);
   const id = url.searchParams.get("id");

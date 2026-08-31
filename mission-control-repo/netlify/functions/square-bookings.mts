@@ -1,5 +1,5 @@
 import type { Context, Config } from "@netlify/functions";
-import { isAuthenticated, unauthorized } from "./_shared/session.mts";
+import { getSessionUser, unauthorized, forbidden } from "./_shared/session.mts";
 
 const SQUARE_VERSION = "2026-01-22";
 const BASE = "https://connect.squareup.com/v2";
@@ -14,7 +14,9 @@ function squareHeaders() {
 }
 
 export default async (req: Request, context: Context) => {
-  if (!(await isAuthenticated(req))) return unauthorized();
+  const user = await getSessionUser(req);
+  if (!user) return unauthorized();
+  if (!user.can_view_square) return forbidden();
 
   const locationId = Netlify.env.get("SQUARE_LOCATION_ID") || "";
   const token = Netlify.env.get("SQUARE_ACCESS_TOKEN") || "";

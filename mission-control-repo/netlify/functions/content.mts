@@ -1,6 +1,6 @@
 import type { Context, Config } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
-import { isAuthenticated, unauthorized } from "./_shared/session.mts";
+import { getSessionUser, unauthorized, forbidden } from "./_shared/session.mts";
 
 export default async (req: Request, context: Context) => {
   const db = getDatabase();
@@ -17,7 +17,9 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method === "PUT") {
-    if (!(await isAuthenticated(req))) return unauthorized();
+    const user = await getSessionUser(req);
+    if (!user) return unauthorized();
+    if (!user.can_edit_content) return forbidden();
     const body = await req.json().catch(() => ({}));
     const entries = Object.entries(body) as [string, string][];
     for (const [key, value] of entries) {
