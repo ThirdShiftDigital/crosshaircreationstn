@@ -108,6 +108,7 @@
     <button class="tab-btn" data-panel="leads">Leads</button>
     <button class="tab-btn" data-panel="tasks">Tasks</button>
     <button class="tab-btn" data-panel="notes">Notes</button>
+    <button class="tab-btn" data-panel="square">Square Bookings</button>
   </nav>
 
   <main>
@@ -228,6 +229,19 @@
           <button class="primary" id="add-note-btn">Add Note</button>
         </div>
         <div id="notes-list"></div>
+      </div>
+    </section>
+
+    <!-- SQUARE BOOKINGS -->
+    <section class="panel" id="panel-square">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.9rem;">
+          <h3 style="margin:0;">Live from Square</h3>
+          <button id="refresh-square-btn">Refresh</button>
+        </div>
+        <p class="tele" style="margin-bottom:1rem;">Read-only view of what's actually booked in Square Appointments.</p>
+        <div id="square-status" class="tele" style="margin-bottom:0.8rem;"></div>
+        <div id="square-list"></div>
       </div>
     </section>
   </main>
@@ -452,12 +466,53 @@ function esc(str) {
   return d.innerHTML;
 }
 
+// ---- Square Bookings ----
+async function loadSquare() {
+  const statusEl = document.getElementById('square-status');
+  const listEl = document.getElementById('square-list');
+  statusEl.textContent = 'Loading from Square...';
+  listEl.innerHTML = '';
+  try {
+    const res = await fetch(API + '/square-bookings', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.textContent = '';
+      listEl.innerHTML = `<p class="tele" style="color:var(--danger);">${esc(data.error || 'Something went wrong reaching Square.')}</p>`;
+      return;
+    }
+    if (!data.length) {
+      statusEl.textContent = '';
+      listEl.innerHTML = '<p class="tele">No bookings found in Square right now.</p>';
+      return;
+    }
+    statusEl.textContent = data.length + ' booking(s) found';
+    data.forEach(b => {
+      const div = document.createElement('div');
+      div.className = 'list-item';
+      const when = b.start_at ? new Date(b.start_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'No time set';
+      div.innerHTML = `
+        <div>
+          <strong>${esc(b.customer_name)}</strong> — ${esc(b.service_name || 'Service')}
+          <div class="meta">${esc(when)} ${b.duration_minutes ? '· ' + b.duration_minutes + ' min' : ''}</div>
+          <div class="meta">${esc(b.customer_phone || '')} ${b.customer_email ? '· ' + esc(b.customer_email) : ''}</div>
+        </div>
+        <span class="status-pill status-${b.status === 'ACCEPTED' ? 'confirmed' : b.status === 'CANCELLED_BY_CUSTOMER' || b.status === 'CANCELLED_BY_SELLER' ? 'cancelled' : 'pending'}">${esc(b.status || '')}</span>`;
+      listEl.appendChild(div);
+    });
+  } catch (e) {
+    statusEl.textContent = '';
+    listEl.innerHTML = '<p class="tele" style="color:var(--danger);">Could not reach the dashboard server.</p>';
+  }
+}
+document.getElementById('refresh-square-btn').addEventListener('click', loadSquare);
+
 function loadAll() {
   loadContent();
   loadBookings();
   loadLeads();
   loadTasks();
   loadNotes();
+  loadSquare();
 }
 
 // Check session on load
