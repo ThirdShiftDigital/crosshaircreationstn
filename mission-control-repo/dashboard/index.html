@@ -594,7 +594,7 @@ async function loadTeam() {
     el.appendChild(div);
   });
   el.querySelectorAll('.del-team').forEach(btn => btn.addEventListener('click', async () => {
-    if (!confirm('Remove this person\\'s access?')) return;
+    if (!confirm('Remove this person\'s access?')) return;
     await api('/team?id=' + btn.dataset.id, { method: 'DELETE' });
     loadTeam();
   }));
