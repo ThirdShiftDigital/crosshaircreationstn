@@ -66,6 +66,19 @@
 
   .form-error { color: var(--urgent); font-size: 0.85rem; text-align: center; min-height: 1.2em; }
 
+  .disclaimer-box {
+    background: var(--sky-mid); border: 1px solid var(--sky-line); border-radius: 8px;
+    padding: 1rem 1.1rem; font-size: 0.85rem; color: var(--ink-dim); margin-top: 0.3rem;
+  }
+  .disclaimer-box p { margin: 0 0 0.7rem; }
+  .disclaimer-box p:last-of-type { margin-bottom: 0.9rem; }
+  .disclaimer-check {
+    display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;
+    font-size: 0.88rem; color: var(--ink); font-family: 'Inter', sans-serif;
+    text-transform: none; letter-spacing: normal; padding-top: 0.7rem; border-top: 1px solid var(--sky-line);
+  }
+  .disclaimer-check input { width: auto; margin-top: 0.15rem; flex-shrink: 0; }
+
   /* Results / instructions screen */
   #results { display: none; }
   .results-head { text-align: center; margin-bottom: 1.5rem; }
@@ -124,6 +137,15 @@
         <label for="f-details">What's Happening?</label>
         <textarea id="f-details" rows="4" placeholder="e.g. Last seen heading toward the tree line behind the barn about 20 minutes ago"></textarea>
       </div>
+      <div class="disclaimer-box">
+        <p class="tele" style="margin-bottom:0.5rem;">Please read before submitting</p>
+        <p>Recovery success depends on terrain, weather, time elapsed, and animal movement — <strong>we cannot guarantee an animal will be located or recovered.</strong> Flights are subject to weather, safety, and airspace conditions, and may be delayed or unable to proceed if conditions aren't safe.</p>
+        <p>By submitting this request, you confirm you have the legal right or permission to have this search conducted on the property involved, and that the information you've provided is accurate. Service fees apply for the search flight regardless of outcome.</p>
+        <label class="disclaimer-check">
+          <input type="checkbox" id="f-agree" required>
+          <span>I understand and agree to the above</span>
+        </label>
+      </div>
       <button type="submit" class="submit-btn" id="submit-btn">Send Request</button>
       <div class="form-error" id="form-error"></div>
     </form>
@@ -169,6 +191,10 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
     errEl.textContent = 'Name and phone number are required.';
     return;
   }
+  if (!document.getElementById('f-agree').checked) {
+    errEl.textContent = 'Please check the box to agree before submitting.';
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = 'Sending...';
@@ -183,6 +209,7 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
         recovery_type: selectedType,
         location_description: document.getElementById('f-location').value.trim(),
         details: document.getElementById('f-details').value.trim(),
+        agreed_to_disclaimer: true,
       }),
     });
     const data = await res.json();

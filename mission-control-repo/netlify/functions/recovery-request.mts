@@ -31,17 +31,23 @@ export default async (req: Request, context: Context) => {
   const recoveryType = body.recovery_type === "deer" ? "deer" : "pet";
   const locationDescription = (body.location_description || "").trim();
   const details = (body.details || "").trim();
+  const agreedToDisclaimer = body.agreed_to_disclaimer === true;
 
   if (!name || !phone) {
     return new Response(JSON.stringify({ error: "Name and phone number are required." }), {
       status: 400, headers: { "content-type": "application/json" },
     });
   }
+  if (!agreedToDisclaimer) {
+    return new Response(JSON.stringify({ error: "You must agree to the disclaimer before submitting." }), {
+      status: 400, headers: { "content-type": "application/json" },
+    });
+  }
 
   const db = getDatabase();
   const [row] = await db.sql`
-    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details)
-    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null})
+    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details, agreed_to_disclaimer)
+    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null}, ${agreedToDisclaimer})
     RETURNING id, created_at
   `;
 

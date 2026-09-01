@@ -1,0 +1,1 @@
+ALTER TABLE recovery_requests ADD COLUMN IF NOT EXISTS agreed_to_disclaimer BOOLEAN NOT NULL DEFAULT FALSE;

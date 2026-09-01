@@ -683,12 +683,18 @@ async function loadRecovery() {
           <select class="recovery-status-select" data-id="${r.id}">
             ${Object.keys(RECOVERY_STATUS_LABELS).map(s => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${RECOVERY_STATUS_LABELS[s]}</option>`).join('')}
           </select>
+          <button class="del-recovery danger" data-id="${r.id}">Delete</button>
         </div>`;
       listEl.appendChild(div);
     });
     listEl.querySelectorAll('.recovery-status-select').forEach(sel => sel.addEventListener('change', async () => {
       await api('/recovery-requests?id=' + sel.dataset.id, { method: 'PUT', body: JSON.stringify({ status: sel.value }) });
-      toast('Status updated');
+      toast('Status updated — customer notified if they left an email');
+    }));
+    listEl.querySelectorAll('.del-recovery').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm("Delete this recovery request? This can't be undone.")) return;
+      await api('/recovery-requests?id=' + btn.dataset.id, { method: 'DELETE' });
+      loadRecovery();
     }));
   } catch (e) {
     statusEl.textContent = '';
