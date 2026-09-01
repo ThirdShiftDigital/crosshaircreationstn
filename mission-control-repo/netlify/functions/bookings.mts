@@ -1,6 +1,7 @@
 import type { Context, Config } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
 import { getSessionUser, unauthorized, forbidden } from "./_shared/session.mts";
+import { notifyOptedInUsers } from "./_shared/notify.mts";
 
 export default async (req: Request, context: Context) => {
   const user = await getSessionUser(req);
@@ -22,6 +23,11 @@ export default async (req: Request, context: Context) => {
       VALUES (${b.customer_name}, ${b.service || null}, ${b.contact || null}, ${b.scheduled_date || null}, ${b.scheduled_time || null}, ${b.status || "pending"}, ${b.price || null}, ${b.notes || null})
       RETURNING *
     `;
+    await notifyOptedInUsers(
+      "bookings",
+      `New booking added — ${row.customer_name}`,
+      `A new booking was added in Mission Control.\n\nCustomer: ${row.customer_name}\nService: ${row.service || "not specified"}\nDate: ${row.scheduled_date || "TBD"} ${row.scheduled_time || ""}\nContact: ${row.contact || "not provided"}\n\nView it in Mission Control: https://crosshaircreationstn.com/dashboard`
+    );
     return new Response(JSON.stringify(row), { status: 201, headers: { "content-type": "application/json" } });
   }
 

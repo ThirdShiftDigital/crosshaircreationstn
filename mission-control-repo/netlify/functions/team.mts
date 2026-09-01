@@ -5,7 +5,8 @@ import { hashPassword } from "./_shared/password.mts";
 
 const PERMISSION_KEYS = [
   "can_edit_content", "can_edit_bookings", "can_edit_leads",
-  "can_edit_tasks", "can_edit_notes", "can_view_square", "can_manage_square_bookings", "can_view_recovery_requests", "can_manage_team",
+  "can_edit_tasks", "can_edit_notes", "can_view_square", "can_manage_square_bookings",
+  "can_view_recovery_requests", "can_manage_team",
 ];
 
 export default async (req: Request, context: Context) => {
@@ -19,8 +20,10 @@ export default async (req: Request, context: Context) => {
 
   if (req.method === "GET") {
     const rows = await db.sql`
-      SELECT id, name, email, is_owner, can_edit_content, can_edit_bookings, can_edit_leads,
-             can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings, can_view_recovery_requests, can_manage_team, created_at
+      SELECT id, name, email, phone, is_owner, can_edit_content, can_edit_bookings, can_edit_leads,
+             can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings,
+             can_view_recovery_requests, can_manage_team,
+             notify_new_bookings, notify_new_recovery, created_at
       FROM users ORDER BY is_owner DESC, created_at ASC
     `;
     return new Response(JSON.stringify(rows), { status: 200, headers: { "content-type": "application/json" } });
@@ -30,6 +33,7 @@ export default async (req: Request, context: Context) => {
     const b = await req.json().catch(() => ({}));
     const name = (b.name || "").trim();
     const email = (b.email || "").trim().toLowerCase();
+    const phone = (b.phone || "").trim();
     const password = b.password || "";
     if (!name || !email || password.length < 6) {
       return new Response(JSON.stringify({ error: "Name, email, and a password of at least 6 characters are required." }), {
@@ -39,16 +43,23 @@ export default async (req: Request, context: Context) => {
     const { hash, salt } = hashPassword(password);
     const perms: Record<string, boolean> = {};
     for (const key of PERMISSION_KEYS) perms[key] = !!b[key];
+    const notifyBookings = !!b.notify_new_bookings;
+    const notifyRecovery = !!b.notify_new_recovery;
 
     try {
       const [row] = await db.sql`
-        INSERT INTO users (name, email, password_hash, password_salt, is_owner,
-          can_edit_content, can_edit_bookings, can_edit_leads, can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings, can_view_recovery_requests, can_manage_team)
-        VALUES (${name}, ${email}, ${hash}, ${salt}, FALSE,
+        INSERT INTO users (name, email, phone, password_hash, password_salt, is_owner,
+          can_edit_content, can_edit_bookings, can_edit_leads, can_edit_tasks, can_edit_notes,
+          can_view_square, can_manage_square_bookings, can_view_recovery_requests, can_manage_team,
+          notify_new_bookings, notify_new_recovery)
+        VALUES (${name}, ${email}, ${phone || null}, ${hash}, ${salt}, FALSE,
           ${perms.can_edit_content}, ${perms.can_edit_bookings}, ${perms.can_edit_leads},
-          ${perms.can_edit_tasks}, ${perms.can_edit_notes}, ${perms.can_view_square}, ${perms.can_manage_square_bookings}, ${perms.can_view_recovery_requests}, ${perms.can_manage_team})
-        RETURNING id, name, email, is_owner, can_edit_content, can_edit_bookings, can_edit_leads,
-                  can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings, can_view_recovery_requests, can_manage_team
+          ${perms.can_edit_tasks}, ${perms.can_edit_notes}, ${perms.can_view_square},
+          ${perms.can_manage_square_bookings}, ${perms.can_view_recovery_requests}, ${perms.can_manage_team},
+          ${notifyBookings}, ${notifyRecovery})
+        RETURNING id, name, email, phone, is_owner, can_edit_content, can_edit_bookings, can_edit_leads,
+                  can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings,
+                  can_view_recovery_requests, can_manage_team, notify_new_bookings, notify_new_recovery
       `;
       return new Response(JSON.stringify(row), { status: 201, headers: { "content-type": "application/json" } });
     } catch (err: any) {
@@ -61,9 +72,24 @@ export default async (req: Request, context: Context) => {
   if (req.method === "PUT" && id) {
     const targetRows = await db.sql`SELECT is_owner FROM users WHERE id = ${id}`;
     if (!targetRows.length) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "content-type": "application/json" } });
-    if (targetRows[0].is_owner) return forbidden("The owner account's permissions can't be changed.");
+    const targetIsOwner = targetRows[0].is_owner;
 
     const b = await req.json().catch(() => ({}));
+    const phone = (b.phone || "").trim();
+    const notifyBookings = !!b.notify_new_bookings;
+    const notifyRecovery = !!b.notify_new_recovery;
+
+    if (targetIsOwner) {
+      // Owner's access permissions are permanent — only phone/notification prefs can change
+      await db.sql`
+        UPDATE users SET
+          phone = ${phone || null},
+          notify_new_bookings = ${notifyBookings}, notify_new_recovery = ${notifyRecovery}
+        WHERE id = ${id}
+      `;
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+
     const perms: Record<string, boolean> = {};
     for (const key of PERMISSION_KEYS) perms[key] = !!b[key];
 
@@ -71,23 +97,28 @@ export default async (req: Request, context: Context) => {
       const { hash, salt } = hashPassword(b.password);
       await db.sql`
         UPDATE users SET
+          phone = ${phone || null},
           can_edit_content = ${perms.can_edit_content}, can_edit_bookings = ${perms.can_edit_bookings},
           can_edit_leads = ${perms.can_edit_leads}, can_edit_tasks = ${perms.can_edit_tasks},
           can_edit_notes = ${perms.can_edit_notes}, can_view_square = ${perms.can_view_square},
           can_manage_square_bookings = ${perms.can_manage_square_bookings},
           can_view_recovery_requests = ${perms.can_view_recovery_requests},
-          can_manage_team = ${perms.can_manage_team}, password_hash = ${hash}, password_salt = ${salt}
+          can_manage_team = ${perms.can_manage_team},
+          notify_new_bookings = ${notifyBookings}, notify_new_recovery = ${notifyRecovery},
+          password_hash = ${hash}, password_salt = ${salt}
         WHERE id = ${id}
       `;
     } else {
       await db.sql`
         UPDATE users SET
+          phone = ${phone || null},
           can_edit_content = ${perms.can_edit_content}, can_edit_bookings = ${perms.can_edit_bookings},
           can_edit_leads = ${perms.can_edit_leads}, can_edit_tasks = ${perms.can_edit_tasks},
           can_edit_notes = ${perms.can_edit_notes}, can_view_square = ${perms.can_view_square},
           can_manage_square_bookings = ${perms.can_manage_square_bookings},
           can_view_recovery_requests = ${perms.can_view_recovery_requests},
-          can_manage_team = ${perms.can_manage_team}
+          can_manage_team = ${perms.can_manage_team},
+          notify_new_bookings = ${notifyBookings}, notify_new_recovery = ${notifyRecovery}
         WHERE id = ${id}
       `;
     }

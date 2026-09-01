@@ -1,6 +1,6 @@
 import type { Context, Config } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
-import { sendSms } from "./_shared/sms.mts";
+import { notifyOptedInUsers } from "./_shared/notify.mts";
 
 const PET_INSTRUCTIONS = [
   "Stay in the area if it's safe to do so — pets often circle back to where they were last seen.",
@@ -52,34 +52,10 @@ export default async (req: Request, context: Context) => {
     RETURNING id, created_at
   `;
 
-  // Fire off the email alert — never let an email failure block the customer's response
-  try {
-    const resendKey = Netlify.env.get("RESEND_API_KEY");
-    const alertTo = Netlify.env.get("ALERT_EMAIL") || "chris@crosshaircreationstn.com";
-    if (resendKey) {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "Crosshair Recovery Alerts <onboarding@resend.dev>",
-          to: [alertTo],
-          subject: `🚨 New ${recoveryType === "deer" ? "Deer" : "Pet"} Recovery Request — ${name}`,
-          text: `New recovery request just came in.\n\nName: ${name}\nPhone: ${phone}\nEmail: ${email || "not provided"}\nType: ${recoveryType === "deer" ? "Deer Recovery" : "Pet Recovery"}\nLocation: ${locationDescription || "not provided"}\nDetails: ${details || "none"}\n\nView it in Mission Control: https://crosshaircreationstn.com/dashboard`,
-        }),
-      });
-    }
-  } catch {
-    // swallow — the request is already saved, email is a nice-to-have alert
-  }
-
-  // Text alert too — the whole point of this is speed
-  const alertPhone = Netlify.env.get("ALERT_PHONE") || "+16155495067";
-  await sendSms(
-    alertPhone,
-    `🚨 New ${recoveryType === "deer" ? "Deer" : "Pet"} Recovery request from ${name} (${phone}). ${locationDescription ? "Location: " + locationDescription + ". " : ""}Check Mission Control for details.`
+  await notifyOptedInUsers(
+    "recovery",
+    `🚨 New ${recoveryType === "deer" ? "Deer" : "Pet"} Recovery Request — ${name}`,
+    `New recovery request just came in.\n\nName: ${name}\nPhone: ${phone}\nEmail: ${email || "not provided"}\nType: ${recoveryType === "deer" ? "Deer Recovery" : "Pet Recovery"}\nLocation: ${locationDescription || "not provided"}\nDetails: ${details || "none"}\n\nView it in Mission Control: https://crosshaircreationstn.com/dashboard`
   );
 
   const instructions = recoveryType === "deer" ? DEER_INSTRUCTIONS : PET_INSTRUCTIONS;

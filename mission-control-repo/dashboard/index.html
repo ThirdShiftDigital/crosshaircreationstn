@@ -279,6 +279,7 @@
             <input id="tm-email" type="email" placeholder="Email">
           </div>
           <input id="tm-password" type="password" placeholder="Password (min. 6 characters)">
+          <input id="tm-phone" type="tel" placeholder="Phone (for text alerts, optional) — e.g. (615) 555-0123">
           <div class="perm-grid">
             <label><input type="checkbox" class="tm-perm" value="can_edit_content"> Pricing &amp; Content</label>
             <label><input type="checkbox" class="tm-perm" value="can_edit_bookings" checked> Bookings</label>
@@ -289,6 +290,11 @@
             <label><input type="checkbox" class="tm-perm" value="can_manage_square_bookings"> Square Bookings (manage)</label>
             <label><input type="checkbox" class="tm-perm" value="can_view_recovery_requests" checked> Recovery Requests</label>
             <label><input type="checkbox" class="tm-perm" value="can_manage_team"> Team Access</label>
+          </div>
+          <p class="tele" style="margin:0.9rem 0 0.4rem;">Notify this person by text/email when...</p>
+          <div class="perm-grid">
+            <label><input type="checkbox" class="tm-notify" value="notify_new_bookings"> A new booking comes in (Square or manual)</label>
+            <label><input type="checkbox" class="tm-notify" value="notify_new_recovery"> A new recovery request comes in</label>
           </div>
           <button class="primary" id="add-team-btn">Add Team Member</button>
         </div>
@@ -710,6 +716,10 @@ const PERM_LABELS = {
   can_manage_square_bookings: 'Square Bookings (manage)', can_view_recovery_requests: 'Recovery Requests',
   can_manage_team: 'Team Access',
 };
+const NOTIFY_LABELS = {
+  notify_new_bookings: 'New bookings (Square or manual)',
+  notify_new_recovery: 'New recovery requests',
+};
 async function loadTeam() {
   if (!currentUser || !(currentUser.is_owner || currentUser.can_manage_team)) return;
   const rows = await api('/team');
@@ -717,18 +727,35 @@ async function loadTeam() {
   el.innerHTML = '';
   rows.forEach(u => {
     const granted = Object.keys(PERM_LABELS).filter(k => u[k]).map(k => PERM_LABELS[k]);
+    const notifying = Object.keys(NOTIFY_LABELS).filter(k => u[k]).map(k => NOTIFY_LABELS[k]);
     const div = document.createElement('div');
     div.className = 'list-item';
     div.style.flexDirection = 'column';
     div.style.alignItems = 'stretch';
 
-    const editFormHtml = u.is_owner ? '' : `
+    const notifyFieldsHtml = `
+      <input type="tel" class="team-edit-phone" placeholder="Phone (for text alerts)" value="${esc(u.phone || '')}" style="margin-bottom:0.6rem;">
+      <p class="tele" style="margin:0 0 0.4rem;">Notify by text/email when...</p>
+      <div class="perm-grid" style="margin-bottom:0.7rem;">
+        ${Object.keys(NOTIFY_LABELS).map(key => `
+          <label><input type="checkbox" class="team-edit-notify" value="${key}" ${u[key] ? 'checked' : ''}> ${NOTIFY_LABELS[key]}</label>
+        `).join('')}
+      </div>`;
+
+    const editFormHtml = u.is_owner
+      ? `
+      <div class="team-edit-form" data-id="${u.id}" style="display:none; margin-top:0.8rem; padding-top:0.8rem; border-top:1px dashed var(--sky-line);">
+        ${notifyFieldsHtml}
+        <button class="primary team-save-btn" data-id="${u.id}">Save Changes</button>
+      </div>`
+      : `
       <div class="team-edit-form" data-id="${u.id}" style="display:none; margin-top:0.8rem; padding-top:0.8rem; border-top:1px dashed var(--sky-line);">
         <div class="perm-grid" style="margin-bottom:0.7rem;">
           ${Object.keys(PERM_LABELS).map(key => `
             <label><input type="checkbox" class="team-edit-perm" value="${key}" ${u[key] ? 'checked' : ''}> ${PERM_LABELS[key]}</label>
           `).join('')}
         </div>
+        ${notifyFieldsHtml}
         <input type="password" class="team-edit-password" placeholder="New password (leave blank to keep current)" style="margin-bottom:0.6rem;">
         <button class="primary team-save-btn" data-id="${u.id}">Save Changes</button>
       </div>`;
@@ -737,13 +764,14 @@ async function loadTeam() {
       <div style="display:flex; justify-content:space-between; gap:0.75rem;">
         <div>
           <strong>${esc(u.name)}</strong> ${u.is_owner ? '<span class="owner-badge">Owner</span>' : ''}
-          <div class="meta">${esc(u.email)}</div>
+          <div class="meta">${esc(u.email)} ${u.phone ? '· ' + esc(u.phone) : ''}</div>
           <div class="meta">${granted.length ? esc(granted.join(', ')) : 'No permissions granted'}</div>
+          <div class="meta">${notifying.length ? 'Notified: ' + esc(notifying.join(', ')) : 'Not notified of anything'}</div>
         </div>
-        ${u.is_owner ? '' : `<div class="list-actions">
+        <div class="list-actions">
           <button data-id="${u.id}" class="edit-team">Edit</button>
-          <button data-id="${u.id}" class="del-team danger">Remove</button>
-        </div>`}
+          ${u.is_owner ? '' : `<button data-id="${u.id}" class="del-team danger">Remove</button>`}
+        </div>
       </div>
       ${editFormHtml}
     `;
@@ -751,7 +779,7 @@ async function loadTeam() {
   });
 
   el.querySelectorAll('.del-team').forEach(btn => btn.addEventListener('click', async () => {
-    if (!confirm('Remove this person\'s access?')) return;
+    if (!confirm("Remove this person's access?")) return;
     await api('/team?id=' + btn.dataset.id, { method: 'DELETE' });
     loadTeam();
   }));
@@ -766,14 +794,17 @@ async function loadTeam() {
     const form = btn.closest('.team-edit-form');
     const payload = {};
     form.querySelectorAll('.team-edit-perm').forEach(cb => payload[cb.value] = cb.checked);
-    const newPassword = form.querySelector('.team-edit-password').value;
-    if (newPassword) {
-      if (newPassword.length < 6) return toast('New password must be at least 6 characters');
-      payload.password = newPassword;
+    form.querySelectorAll('.team-edit-notify').forEach(cb => payload[cb.value] = cb.checked);
+    const phoneInput = form.querySelector('.team-edit-phone');
+    if (phoneInput) payload.phone = phoneInput.value.trim();
+    const passwordInput = form.querySelector('.team-edit-password');
+    if (passwordInput && passwordInput.value) {
+      if (passwordInput.value.length < 6) return toast('New password must be at least 6 characters');
+      payload.password = passwordInput.value;
     }
     const res = await api('/team?id=' + id, { method: 'PUT', body: JSON.stringify(payload) });
     if (res.error) return toast(res.error);
-    toast('Permissions updated');
+    toast('Saved');
     loadTeam();
   }));
 }
@@ -781,12 +812,15 @@ document.getElementById('add-team-btn').addEventListener('click', async () => {
   const name = document.getElementById('tm-name').value.trim();
   const email = document.getElementById('tm-email').value.trim();
   const password = document.getElementById('tm-password').value;
+  const phone = document.getElementById('tm-phone').value.trim();
   if (!name || !email || password.length < 6) return toast('Name, email, and a 6+ character password are required');
-  const payload = { name, email, password };
+  const payload = { name, email, password, phone };
   document.querySelectorAll('.tm-perm').forEach(cb => payload[cb.value] = cb.checked);
+  document.querySelectorAll('.tm-notify').forEach(cb => payload[cb.value] = cb.checked);
   const res = await api('/team', { method: 'POST', body: JSON.stringify(payload) });
   if (res.error) return toast(res.error);
-  ['tm-name','tm-email','tm-password'].forEach(id => document.getElementById(id).value = '');
+  ['tm-name','tm-email','tm-password','tm-phone'].forEach(id => document.getElementById(id).value = '');
+  document.querySelectorAll('.tm-notify').forEach(cb => cb.checked = false);
   loadTeam();
   toast('Team member added');
 });
