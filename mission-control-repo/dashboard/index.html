@@ -645,19 +645,61 @@ async function loadTeam() {
     const granted = Object.keys(PERM_LABELS).filter(k => u[k]).map(k => PERM_LABELS[k]);
     const div = document.createElement('div');
     div.className = 'list-item';
+    div.style.flexDirection = 'column';
+    div.style.alignItems = 'stretch';
+
+    const editFormHtml = u.is_owner ? '' : `
+      <div class="team-edit-form" data-id="${u.id}" style="display:none; margin-top:0.8rem; padding-top:0.8rem; border-top:1px dashed var(--sky-line);">
+        <div class="perm-grid" style="margin-bottom:0.7rem;">
+          ${Object.keys(PERM_LABELS).map(key => `
+            <label><input type="checkbox" class="team-edit-perm" value="${key}" ${u[key] ? 'checked' : ''}> ${PERM_LABELS[key]}</label>
+          `).join('')}
+        </div>
+        <input type="password" class="team-edit-password" placeholder="New password (leave blank to keep current)" style="margin-bottom:0.6rem;">
+        <button class="primary team-save-btn" data-id="${u.id}">Save Changes</button>
+      </div>`;
+
     div.innerHTML = `
-      <div>
-        <strong>${esc(u.name)}</strong> ${u.is_owner ? '<span class="owner-badge">Owner</span>' : ''}
-        <div class="meta">${esc(u.email)}</div>
-        <div class="meta">${granted.length ? esc(granted.join(', ')) : 'No permissions granted'}</div>
+      <div style="display:flex; justify-content:space-between; gap:0.75rem;">
+        <div>
+          <strong>${esc(u.name)}</strong> ${u.is_owner ? '<span class="owner-badge">Owner</span>' : ''}
+          <div class="meta">${esc(u.email)}</div>
+          <div class="meta">${granted.length ? esc(granted.join(', ')) : 'No permissions granted'}</div>
+        </div>
+        ${u.is_owner ? '' : `<div class="list-actions">
+          <button data-id="${u.id}" class="edit-team">Edit</button>
+          <button data-id="${u.id}" class="del-team danger">Remove</button>
+        </div>`}
       </div>
-      ${u.is_owner ? '' : `<div class="list-actions"><button data-id="${u.id}" class="del-team danger">Remove</button></div>`}
+      ${editFormHtml}
     `;
     el.appendChild(div);
   });
+
   el.querySelectorAll('.del-team').forEach(btn => btn.addEventListener('click', async () => {
     if (!confirm('Remove this person\'s access?')) return;
     await api('/team?id=' + btn.dataset.id, { method: 'DELETE' });
+    loadTeam();
+  }));
+
+  el.querySelectorAll('.edit-team').forEach(btn => btn.addEventListener('click', () => {
+    const form = el.querySelector(`.team-edit-form[data-id="${btn.dataset.id}"]`);
+    if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  }));
+
+  el.querySelectorAll('.team-save-btn').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    const form = btn.closest('.team-edit-form');
+    const payload = {};
+    form.querySelectorAll('.team-edit-perm').forEach(cb => payload[cb.value] = cb.checked);
+    const newPassword = form.querySelector('.team-edit-password').value;
+    if (newPassword) {
+      if (newPassword.length < 6) return toast('New password must be at least 6 characters');
+      payload.password = newPassword;
+    }
+    const res = await api('/team?id=' + id, { method: 'PUT', body: JSON.stringify(payload) });
+    if (res.error) return toast(res.error);
+    toast('Permissions updated');
     loadTeam();
   }));
 }
