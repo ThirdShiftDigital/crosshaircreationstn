@@ -14,6 +14,7 @@ export type SessionUser = {
   can_edit_notes: boolean;
   can_view_square: boolean;
   can_manage_square_bookings: boolean;
+  can_view_recovery_requests: boolean;
   can_manage_team: boolean;
 };
 
@@ -31,7 +32,7 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
   const rows = await db.sql`
     SELECT u.id, u.name, u.email, u.is_owner,
            u.can_edit_content, u.can_edit_bookings, u.can_edit_leads,
-           u.can_edit_tasks, u.can_edit_notes, u.can_view_square, u.can_manage_square_bookings, u.can_manage_team
+           u.can_edit_tasks, u.can_edit_notes, u.can_view_square, u.can_manage_square_bookings, u.can_view_recovery_requests, u.can_manage_team
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE s.token = ${token} AND s.expires_at > NOW()

@@ -118,6 +118,7 @@
     <button class="tab-btn" data-panel="tasks">Tasks</button>
     <button class="tab-btn" data-panel="notes">Notes</button>
     <button class="tab-btn" data-panel="square">Square Bookings</button>
+    <button class="tab-btn" data-panel="recovery">Recovery Requests</button>
     <button class="tab-btn" data-panel="team">Team Access</button>
   </nav>
 
@@ -255,6 +256,19 @@
       </div>
     </section>
 
+    <!-- RECOVERY REQUESTS -->
+    <section class="panel" id="panel-recovery">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.9rem;">
+          <h3 style="margin:0;">Incoming Recovery Requests</h3>
+          <button id="refresh-recovery-btn">Refresh</button>
+        </div>
+        <p class="tele" style="margin-bottom:1rem;">Submitted from the emergency recovery page at /recovery</p>
+        <div id="recovery-status" class="tele" style="margin-bottom:0.8rem;"></div>
+        <div id="recovery-list"></div>
+      </div>
+    </section>
+
     <!-- TEAM ACCESS -->
     <section class="panel" id="panel-team">
       <div class="card">
@@ -273,6 +287,7 @@
             <label><input type="checkbox" class="tm-perm" value="can_edit_notes" checked> Notes</label>
             <label><input type="checkbox" class="tm-perm" value="can_view_square" checked> Square Bookings (view)</label>
             <label><input type="checkbox" class="tm-perm" value="can_manage_square_bookings"> Square Bookings (manage)</label>
+            <label><input type="checkbox" class="tm-perm" value="can_view_recovery_requests" checked> Recovery Requests</label>
             <label><input type="checkbox" class="tm-perm" value="can_manage_team"> Team Access</label>
           </div>
           <button class="primary" id="add-team-btn">Add Team Member</button>
@@ -320,7 +335,8 @@ function applyPermissions() {
   if (!currentUser) return;
   const tabPerm = {
     content: 'can_edit_content', bookings: 'can_edit_bookings', leads: 'can_edit_leads',
-    tasks: 'can_edit_tasks', notes: 'can_edit_notes', square: 'can_view_square', team: 'can_manage_team',
+    tasks: 'can_edit_tasks', notes: 'can_edit_notes', square: 'can_view_square',
+    recovery: 'can_view_recovery_requests', team: 'can_manage_team',
   };
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const perm = tabPerm[btn.dataset.panel];
@@ -630,11 +646,63 @@ async function squareAction(bookingId, action, body) {
 
 document.getElementById('refresh-square-btn').addEventListener('click', loadSquare);
 
+// ---- Recovery Requests ----
+const RECOVERY_STATUS_LABELS = { new: 'new', contacted: 'contacted', en_route: 'en_route', resolved: 'resolved', closed: 'closed' };
+async function loadRecovery() {
+  const statusEl = document.getElementById('recovery-status');
+  const listEl = document.getElementById('recovery-list');
+  statusEl.textContent = 'Loading...';
+  listEl.innerHTML = '';
+  try {
+    const res = await fetch(API + '/recovery-requests', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.textContent = '';
+      listEl.innerHTML = `<p class="tele" style="color:var(--danger);">${esc(data.error || 'Something went wrong.')}</p>`;
+      return;
+    }
+    if (!data.length) {
+      statusEl.textContent = '';
+      listEl.innerHTML = '<p class="tele">No recovery requests yet.</p>';
+      return;
+    }
+    statusEl.textContent = data.length + ' request(s)';
+    data.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'list-item';
+      const when = r.created_at ? new Date(r.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      div.innerHTML = `
+        <div>
+          <strong>${r.recovery_type === 'deer' ? '🦌' : '🐾'} ${esc(r.name)}</strong> — ${esc(r.recovery_type === 'deer' ? 'Deer Recovery' : 'Pet Recovery')}
+          <div class="meta">${esc(when)}</div>
+          <div class="meta">${esc(r.phone)} ${r.email ? '· ' + esc(r.email) : ''}</div>
+          ${r.location_description ? `<div class="meta">📍 ${esc(r.location_description)}</div>` : ''}
+          ${r.details ? `<div class="meta">${esc(r.details)}</div>` : ''}
+        </div>
+        <div class="list-actions">
+          <select class="recovery-status-select" data-id="${r.id}">
+            ${Object.keys(RECOVERY_STATUS_LABELS).map(s => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${RECOVERY_STATUS_LABELS[s]}</option>`).join('')}
+          </select>
+        </div>`;
+      listEl.appendChild(div);
+    });
+    listEl.querySelectorAll('.recovery-status-select').forEach(sel => sel.addEventListener('change', async () => {
+      await api('/recovery-requests?id=' + sel.dataset.id, { method: 'PUT', body: JSON.stringify({ status: sel.value }) });
+      toast('Status updated');
+    }));
+  } catch (e) {
+    statusEl.textContent = '';
+    listEl.innerHTML = '<p class="tele" style="color:var(--danger);">Could not reach the dashboard server.</p>';
+  }
+}
+document.getElementById('refresh-recovery-btn').addEventListener('click', loadRecovery);
+
 // ---- Team Access ----
 const PERM_LABELS = {
   can_edit_content: 'Pricing & Content', can_edit_bookings: 'Bookings', can_edit_leads: 'Leads',
   can_edit_tasks: 'Tasks', can_edit_notes: 'Notes', can_view_square: 'Square Bookings (view)',
-  can_manage_square_bookings: 'Square Bookings (manage)', can_manage_team: 'Team Access',
+  can_manage_square_bookings: 'Square Bookings (manage)', can_view_recovery_requests: 'Recovery Requests',
+  can_manage_team: 'Team Access',
 };
 async function loadTeam() {
   if (!currentUser || !(currentUser.is_owner || currentUser.can_manage_team)) return;
@@ -724,6 +792,7 @@ function loadAll() {
   loadTasks();
   loadNotes();
   loadSquare();
+  loadRecovery();
   loadTeam();
 }
 

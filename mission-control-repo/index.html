@@ -132,6 +132,19 @@
   }
   .nav-links .nav-cta:hover, .nav-links .nav-cta:focus-visible { color: var(--sky-deep); filter: brightness(1.08); }
 
+  .nav-links .nav-urgent {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.76rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #ff5d5d;
+    border: 1px solid #ff5d5d;
+    padding: 0.55rem 1rem;
+    border-radius: 3px;
+    font-weight: 700;
+  }
+  .nav-links .nav-urgent:hover, .nav-links .nav-urgent:focus-visible { background: rgba(255,93,93,0.1); color: #ff5d5d; }
+
   .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 0.5rem; }
   .hamburger span {
     display: block; width: 24px; height: 2px;
@@ -863,6 +876,7 @@
     <li><a href="#gallery">Gallery</a></li>
     <li><a href="#contact">Contact</a></li>
     <li><a href="tel:+16155495067">(615) 549-5067</a></li>
+    <li><a class="nav-urgent" href="/recovery">🚨 Emergency Recovery</a></li>
     <li><a class="nav-cta" href="#book">Book a Flight</a></li>
   </ul>
 </nav>
@@ -973,6 +987,7 @@
         <tr><td>Large Property Recovery</td><td><span data-key="recovery_large_property_price">$350</span></td></tr>
         <tr><td>Extended Thermal Pet Recovery</td><td><span data-key="recovery_extended_thermal_price">$450</span></td></tr>
       </table>
+      <a class="btn btn-solid m-book" href="/recovery" style="margin-bottom:0.6rem; display:block; text-align:center;">🚨 Need Help Right Now?</a>
       <a class="btn btn-line m-book" href="https://book.squareup.com/appointments/gsv0t6n88r3lig/location/LFKXTX0J40W2Q/services" target="_blank" rel="noopener">Book This Mission ↗</a>
     </div>
 
