@@ -271,7 +271,8 @@
             <label><input type="checkbox" class="tm-perm" value="can_edit_leads" checked> Leads</label>
             <label><input type="checkbox" class="tm-perm" value="can_edit_tasks" checked> Tasks</label>
             <label><input type="checkbox" class="tm-perm" value="can_edit_notes" checked> Notes</label>
-            <label><input type="checkbox" class="tm-perm" value="can_view_square" checked> Square Bookings</label>
+            <label><input type="checkbox" class="tm-perm" value="can_view_square" checked> Square Bookings (view)</label>
+            <label><input type="checkbox" class="tm-perm" value="can_manage_square_bookings"> Square Bookings (manage)</label>
             <label><input type="checkbox" class="tm-perm" value="can_manage_team"> Team Access</label>
           </div>
           <button class="primary" id="add-team-btn">Add Team Member</button>
@@ -548,31 +549,92 @@ async function loadSquare() {
       listEl.innerHTML = '<p class="tele">No bookings found in Square right now.</p>';
       return;
     }
+    const canManage = currentUser && (currentUser.is_owner || currentUser.can_manage_square_bookings);
     statusEl.textContent = data.length + ' booking(s) found';
     data.forEach(b => {
       const div = document.createElement('div');
       div.className = 'list-item';
+      div.style.flexDirection = 'column';
+      div.style.alignItems = 'stretch';
       const when = b.start_at ? new Date(b.start_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'No time set';
-      div.innerHTML = `
-        <div>
-          <strong>${esc(b.customer_name)}</strong> — ${esc(b.service_name || 'Service')}
-          <div class="meta">${esc(when)} ${b.duration_minutes ? '· ' + b.duration_minutes + ' min' : ''}</div>
-          <div class="meta">${esc(b.customer_phone || '')} ${b.customer_email ? '· ' + esc(b.customer_email) : ''}</div>
+      const cancelled = b.status === 'CANCELLED_BY_CUSTOMER' || b.status === 'CANCELLED_BY_SELLER' || b.status === 'DECLINED';
+      const statusClass = b.status === 'ACCEPTED' ? 'confirmed' : cancelled ? 'cancelled' : 'pending';
+
+      let actionsHtml = '';
+      if (canManage && !cancelled) {
+        actionsHtml = `<div class="list-actions" style="margin-top:0.6rem;">
+          ${b.status !== 'ACCEPTED' ? `<button class="sq-confirm" data-id="${b.id}" data-version="${b.version}">Confirm</button>` : ''}
+          <button class="sq-reschedule" data-id="${b.id}" data-version="${b.version}">Reschedule</button>
+          <button class="sq-cancel danger" data-id="${b.id}" data-version="${b.version}">Cancel</button>
         </div>
-        <span class="status-pill status-${b.status === 'ACCEPTED' ? 'confirmed' : b.status === 'CANCELLED_BY_CUSTOMER' || b.status === 'CANCELLED_BY_SELLER' ? 'cancelled' : 'pending'}">${esc(b.status || '')}</span>`;
+        <div class="sq-reschedule-form" data-id="${b.id}" style="display:none; margin-top:0.6rem; gap:0.5rem;">
+          <input type="datetime-local" class="sq-new-time">
+          <button class="sq-reschedule-confirm primary" data-id="${b.id}" data-version="${b.version}">Save New Time</button>
+        </div>`;
+      }
+
+      div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; gap:0.75rem;">
+          <div>
+            <strong>${esc(b.customer_name)}</strong> — ${esc(b.service_name || 'Service')}
+            <div class="meta">${esc(when)} ${b.duration_minutes ? '· ' + b.duration_minutes + ' min' : ''}</div>
+            <div class="meta">${esc(b.customer_phone || '')} ${b.customer_email ? '· ' + esc(b.customer_email) : ''}</div>
+          </div>
+          <span class="status-pill status-${statusClass}">${esc(b.status || '')}</span>
+        </div>
+        ${actionsHtml}`;
       listEl.appendChild(div);
     });
+
+    listEl.querySelectorAll('.sq-confirm').forEach(btn => btn.addEventListener('click', () => squareAction(btn.dataset.id, 'confirm', { version: Number(btn.dataset.version) })));
+    listEl.querySelectorAll('.sq-cancel').forEach(btn => btn.addEventListener('click', () => {
+      if (!confirm('Cancel this booking in Square? The customer will be notified.')) return;
+      squareAction(btn.dataset.id, 'cancel', { version: Number(btn.dataset.version) });
+    }));
+    listEl.querySelectorAll('.sq-reschedule').forEach(btn => btn.addEventListener('click', () => {
+      const form = listEl.querySelector(`.sq-reschedule-form[data-id="${btn.dataset.id}"]`);
+      if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    }));
+    listEl.querySelectorAll('.sq-reschedule-confirm').forEach(btn => btn.addEventListener('click', () => {
+      const form = btn.closest('.sq-reschedule-form');
+      const input = form.querySelector('.sq-new-time');
+      if (!input.value) return toast('Pick a new date and time first');
+      const iso = new Date(input.value).toISOString();
+      squareAction(btn.dataset.id, 'reschedule', { version: Number(btn.dataset.version), start_at: iso });
+    }));
   } catch (e) {
     statusEl.textContent = '';
     listEl.innerHTML = '<p class="tele" style="color:var(--danger);">Could not reach the dashboard server.</p>';
   }
 }
+
+async function squareAction(bookingId, action, body) {
+  try {
+    const res = await fetch(`${API}/square-bookings?id=${encodeURIComponent(bookingId)}&action=${action}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'same-origin',
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.error || 'Square rejected that change.');
+      return;
+    }
+    toast(action === 'confirm' ? 'Booking confirmed' : action === 'cancel' ? 'Booking cancelled' : 'Booking rescheduled');
+    loadSquare();
+  } catch (e) {
+    toast('Could not reach the dashboard server.');
+  }
+}
+
 document.getElementById('refresh-square-btn').addEventListener('click', loadSquare);
 
 // ---- Team Access ----
 const PERM_LABELS = {
   can_edit_content: 'Pricing & Content', can_edit_bookings: 'Bookings', can_edit_leads: 'Leads',
-  can_edit_tasks: 'Tasks', can_edit_notes: 'Notes', can_view_square: 'Square Bookings', can_manage_team: 'Team Access',
+  can_edit_tasks: 'Tasks', can_edit_notes: 'Notes', can_view_square: 'Square Bookings (view)',
+  can_manage_square_bookings: 'Square Bookings (manage)', can_manage_team: 'Team Access',
 };
 async function loadTeam() {
   if (!currentUser || !(currentUser.is_owner || currentUser.can_manage_team)) return;

@@ -5,7 +5,7 @@ import { hashPassword } from "./_shared/password.mts";
 
 const PERMISSION_KEYS = [
   "can_edit_content", "can_edit_bookings", "can_edit_leads",
-  "can_edit_tasks", "can_edit_notes", "can_view_square", "can_manage_team",
+  "can_edit_tasks", "can_edit_notes", "can_view_square", "can_manage_square_bookings", "can_manage_team",
 ];
 
 export default async (req: Request, context: Context) => {
@@ -20,7 +20,7 @@ export default async (req: Request, context: Context) => {
   if (req.method === "GET") {
     const rows = await db.sql`
       SELECT id, name, email, is_owner, can_edit_content, can_edit_bookings, can_edit_leads,
-             can_edit_tasks, can_edit_notes, can_view_square, can_manage_team, created_at
+             can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings, can_manage_team, created_at
       FROM users ORDER BY is_owner DESC, created_at ASC
     `;
     return new Response(JSON.stringify(rows), { status: 200, headers: { "content-type": "application/json" } });
@@ -43,12 +43,12 @@ export default async (req: Request, context: Context) => {
     try {
       const [row] = await db.sql`
         INSERT INTO users (name, email, password_hash, password_salt, is_owner,
-          can_edit_content, can_edit_bookings, can_edit_leads, can_edit_tasks, can_edit_notes, can_view_square, can_manage_team)
+          can_edit_content, can_edit_bookings, can_edit_leads, can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings, can_manage_team)
         VALUES (${name}, ${email}, ${hash}, ${salt}, FALSE,
           ${perms.can_edit_content}, ${perms.can_edit_bookings}, ${perms.can_edit_leads},
-          ${perms.can_edit_tasks}, ${perms.can_edit_notes}, ${perms.can_view_square}, ${perms.can_manage_team})
+          ${perms.can_edit_tasks}, ${perms.can_edit_notes}, ${perms.can_view_square}, ${perms.can_manage_square_bookings}, ${perms.can_manage_team})
         RETURNING id, name, email, is_owner, can_edit_content, can_edit_bookings, can_edit_leads,
-                  can_edit_tasks, can_edit_notes, can_view_square, can_manage_team
+                  can_edit_tasks, can_edit_notes, can_view_square, can_manage_square_bookings, can_manage_team
       `;
       return new Response(JSON.stringify(row), { status: 201, headers: { "content-type": "application/json" } });
     } catch (err: any) {
@@ -74,6 +74,7 @@ export default async (req: Request, context: Context) => {
           can_edit_content = ${perms.can_edit_content}, can_edit_bookings = ${perms.can_edit_bookings},
           can_edit_leads = ${perms.can_edit_leads}, can_edit_tasks = ${perms.can_edit_tasks},
           can_edit_notes = ${perms.can_edit_notes}, can_view_square = ${perms.can_view_square},
+          can_manage_square_bookings = ${perms.can_manage_square_bookings},
           can_manage_team = ${perms.can_manage_team}, password_hash = ${hash}, password_salt = ${salt}
         WHERE id = ${id}
       `;
@@ -83,6 +84,7 @@ export default async (req: Request, context: Context) => {
           can_edit_content = ${perms.can_edit_content}, can_edit_bookings = ${perms.can_edit_bookings},
           can_edit_leads = ${perms.can_edit_leads}, can_edit_tasks = ${perms.can_edit_tasks},
           can_edit_notes = ${perms.can_edit_notes}, can_view_square = ${perms.can_view_square},
+          can_manage_square_bookings = ${perms.can_manage_square_bookings},
           can_manage_team = ${perms.can_manage_team}
         WHERE id = ${id}
       `;
