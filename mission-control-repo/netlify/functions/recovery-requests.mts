@@ -25,7 +25,7 @@ async function notifyCustomer(request: any, newStatus: string) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Crosshair Creations <onboarding@resend.dev>",
+          from: "Crosshair Creations <alerts@crosshaircreationstn.com>",
           to: [request.email],
           subject: `Update on your ${request.recovery_type === "deer" ? "deer" : "pet"} recovery request`,
           text: `Hi ${request.name},\n\n${message}\n\nQuestions? Call or text us at (615) 549-5067.\n\n— Crosshair Creations`,
