@@ -1,5 +1,6 @@
 import type { Context, Config } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
+import { sendSms } from "./_shared/sms.mts";
 
 const PET_INSTRUCTIONS = [
   "Stay in the area if it's safe to do so — pets often circle back to where they were last seen.",
@@ -73,6 +74,13 @@ export default async (req: Request, context: Context) => {
   } catch {
     // swallow — the request is already saved, email is a nice-to-have alert
   }
+
+  // Text alert too — the whole point of this is speed
+  const alertPhone = Netlify.env.get("ALERT_PHONE") || "+16155495067";
+  await sendSms(
+    alertPhone,
+    `🚨 New ${recoveryType === "deer" ? "Deer" : "Pet"} Recovery request from ${name} (${phone}). ${locationDescription ? "Location: " + locationDescription + ". " : ""}Check Mission Control for details.`
+  );
 
   const instructions = recoveryType === "deer" ? DEER_INSTRUCTIONS : PET_INSTRUCTIONS;
 

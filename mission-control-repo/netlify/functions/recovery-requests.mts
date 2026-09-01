@@ -1,6 +1,7 @@
 import type { Context, Config } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
 import { getSessionUser, unauthorized, forbidden } from "./_shared/session.mts";
+import { sendSms, normalizeUsPhone } from "./_shared/sms.mts";
 
 const CUSTOMER_STATUS_MESSAGES: Record<string, string> = {
   contacted: "We've reviewed your request and will be reaching out shortly to coordinate.",
@@ -10,26 +11,35 @@ const CUSTOMER_STATUS_MESSAGES: Record<string, string> = {
 };
 
 async function notifyCustomer(request: any, newStatus: string) {
-  const resendKey = Netlify.env.get("RESEND_API_KEY");
   const message = CUSTOMER_STATUS_MESSAGES[newStatus];
-  if (!resendKey || !request.email || !message) return;
+  if (!message) return;
 
-  try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "Crosshair Creations <onboarding@resend.dev>",
-        to: [request.email],
-        subject: `Update on your ${request.recovery_type === "deer" ? "deer" : "pet"} recovery request`,
-        text: `Hi ${request.name},\n\n${message}\n\nQuestions? Call or text us at (615) 549-5067.\n\n— Crosshair Creations`,
-      }),
-    });
-  } catch {
-    // never let a notification failure block the status update itself
+  // Email — only if they left one
+  const resendKey = Netlify.env.get("RESEND_API_KEY");
+  if (resendKey && request.email) {
+    try {
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "Crosshair Creations <onboarding@resend.dev>",
+          to: [request.email],
+          subject: `Update on your ${request.recovery_type === "deer" ? "deer" : "pet"} recovery request`,
+          text: `Hi ${request.name},\n\n${message}\n\nQuestions? Call or text us at (615) 549-5067.\n\n— Crosshair Creations`,
+        }),
+      });
+    } catch {
+      // never let a notification failure block the status update itself
+    }
+  }
+
+  // Text — phone is always provided, so this is the more reliable channel
+  const normalizedPhone = normalizeUsPhone(request.phone);
+  if (normalizedPhone) {
+    await sendSms(normalizedPhone, `Crosshair Creations: ${message} Questions? Call/text (615) 549-5067.`);
   }
 }
 
