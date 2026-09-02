@@ -33,6 +33,8 @@ export default async (req: Request, context: Context) => {
   const locationDescription = (body.location_description || "").trim();
   const details = (body.details || "").trim();
   const agreedToDisclaimer = body.agreed_to_disclaimer === true;
+  const latitude = typeof body.latitude === "number" ? body.latitude : null;
+  const longitude = typeof body.longitude === "number" ? body.longitude : null;
 
   if (!name || !phone) {
     return new Response(JSON.stringify({ error: "Name and phone number are required." }), {
@@ -47,15 +49,19 @@ export default async (req: Request, context: Context) => {
 
   const db = getDatabase();
   const [row] = await db.sql`
-    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details, agreed_to_disclaimer)
-    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null}, ${agreedToDisclaimer})
+    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details, agreed_to_disclaimer, latitude, longitude)
+    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null}, ${agreedToDisclaimer}, ${latitude}, ${longitude})
     RETURNING id, created_at
   `;
+
+  const mapLink = (latitude !== null && longitude !== null)
+    ? `\n\nGet directions: https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
+    : "";
 
   await notifyOptedInUsers(
     "recovery",
     `🚨 New ${recoveryType === "deer" ? "Deer" : "Pet"} Recovery Request — ${name}`,
-    `New recovery request just came in.\n\nName: ${name}\nPhone: ${phone}\nEmail: ${email || "not provided"}\nType: ${recoveryType === "deer" ? "Deer Recovery" : "Pet Recovery"}\nLocation: ${locationDescription || "not provided"}\nDetails: ${details || "none"}\n\nView it in Mission Control: https://crosshaircreationstn.com/dashboard`
+    `New recovery request just came in.\n\nName: ${name}\nPhone: ${phone}\nEmail: ${email || "not provided"}\nType: ${recoveryType === "deer" ? "Deer Recovery" : "Pet Recovery"}\nLocation: ${locationDescription || "not provided"}\nDetails: ${details || "none"}${mapLink}\n\nView it in Mission Control: https://crosshaircreationstn.com/dashboard`
   );
 
   const instructions = recoveryType === "deer" ? DEER_INSTRUCTIONS : PET_INSTRUCTIONS;

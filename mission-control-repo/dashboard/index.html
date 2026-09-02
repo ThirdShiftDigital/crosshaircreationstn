@@ -677,6 +677,7 @@ async function loadRecovery() {
       const div = document.createElement('div');
       div.className = 'list-item';
       const when = r.created_at ? new Date(r.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      const hasPin = r.latitude != null && r.longitude != null;
       div.innerHTML = `
         <div>
           <strong>${r.recovery_type === 'deer' ? '🦌' : '🐾'} ${esc(r.name)}</strong> — ${esc(r.recovery_type === 'deer' ? 'Deer Recovery' : 'Pet Recovery')}
@@ -684,6 +685,7 @@ async function loadRecovery() {
           <div class="meta">${esc(r.phone)} ${r.email ? '· ' + esc(r.email) : ''}</div>
           ${r.location_description ? `<div class="meta">📍 ${esc(r.location_description)}</div>` : ''}
           ${r.details ? `<div class="meta">${esc(r.details)}</div>` : ''}
+          ${hasPin ? `<div class="meta"><a href="https://www.google.com/maps/dir/?api=1&destination=${r.latitude},${r.longitude}" target="_blank" rel="noopener" style="color:var(--hud); text-decoration:underline;">🗺️ Get Directions</a></div>` : ''}
         </div>
         <div class="list-actions">
           <select class="recovery-status-select" data-id="${r.id}">

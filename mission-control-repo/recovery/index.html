@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
   :root {
     --sky-deep: #0b1020; --sky-mid: #111a2e; --sky-line: #22304c;
@@ -55,6 +57,19 @@
     border-radius: 8px; padding: 0.85rem 0.9rem; font-family: 'Inter', sans-serif; font-size: 1rem;
   }
   input:focus, textarea:focus { outline: none; border-color: var(--horizon); }
+
+  .locate-btn {
+    width: 100%; padding: 0.85rem; margin-bottom: 0.6rem; border-radius: 8px;
+    background: var(--sky-mid); border: 1px solid var(--sky-line); color: var(--ink);
+    font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+  }
+  .locate-btn:active { border-color: var(--horizon); }
+  .map-box {
+    width: 100%; height: 220px; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--sky-line); background: var(--sky-mid);
+  }
+  .map-hint { margin: 0.5rem 0 0; text-align: center; }
+  .map-hint.set { color: var(--hud); }
 
   .submit-btn {
     width: 100%; padding: 1.1rem; border: none; border-radius: 10px; margin-top: 0.5rem;
@@ -145,6 +160,12 @@
         <input id="f-location" placeholder="Address, crossroads, or landmark">
       </div>
       <div>
+        <label>Pin Your Exact Location (optional but helps a lot)</label>
+        <button type="button" class="locate-btn" id="locate-btn">📍 Use My Current Location</button>
+        <div id="map" class="map-box"></div>
+        <p class="map-hint tele" id="map-hint">Tap the map to place or adjust a pin</p>
+      </div>
+      <div>
         <label for="f-details">What's Happening?</label>
         <textarea id="f-details" rows="4" placeholder="e.g. Last seen heading toward the tree line behind the barn about 20 minutes ago"></textarea>
       </div>
@@ -190,6 +211,67 @@ function selectType(type) {
   document.getElementById('btn-deer').classList.toggle('active', type === 'deer');
 }
 
+// ---- Map / location pin ----
+let pinLat = null;
+let pinLng = null;
+let marker = null;
+
+const DEFAULT_CENTER = [36.16, -86.78]; // Middle Tennessee
+const map = L.map('map', { zoomControl: true }).setView(DEFAULT_CENTER, 9);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 18,
+}).addTo(map);
+
+function setPin(lat, lng, zoom) {
+  pinLat = lat;
+  pinLng = lng;
+  if (marker) {
+    marker.setLatLng([lat, lng]);
+  } else {
+    marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      pinLat = pos.lat;
+      pinLng = pos.lng;
+      updateMapHint();
+    });
+  }
+  map.setView([lat, lng], zoom || map.getZoom());
+  updateMapHint();
+}
+
+function updateMapHint() {
+  const hint = document.getElementById('map-hint');
+  if (pinLat !== null) {
+    hint.textContent = 'Pin set — drag it to fine-tune, or tap elsewhere to move it';
+    hint.classList.add('set');
+  } else {
+    hint.textContent = 'Tap the map to place a pin';
+    hint.classList.remove('set');
+  }
+}
+
+map.on('click', (e) => {
+  setPin(e.latlng.lat, e.latlng.lng);
+});
+
+document.getElementById('locate-btn').addEventListener('click', () => {
+  const hint = document.getElementById('map-hint');
+  if (!navigator.geolocation) {
+    hint.textContent = "Your browser doesn't support location — tap the map to pin manually";
+    return;
+  }
+  hint.textContent = 'Getting your location...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => setPin(pos.coords.latitude, pos.coords.longitude, 15),
+    () => {
+      hint.textContent = "Couldn't get your location — tap the map to pin manually instead";
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
 document.getElementById('recovery-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errEl = document.getElementById('form-error');
@@ -225,6 +307,8 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
         location_description: document.getElementById('f-location').value.trim(),
         details: document.getElementById('f-details').value.trim(),
         agreed_to_disclaimer: true,
+        latitude: pinLat,
+        longitude: pinLng,
       }),
     });
     const data = await res.json();
