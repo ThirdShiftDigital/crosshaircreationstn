@@ -79,6 +79,13 @@
   }
   .disclaimer-check input { width: auto; margin-top: 0.15rem; flex-shrink: 0; }
 
+  .sms-consent {
+    display: flex; align-items: flex-start; gap: 0.55rem; cursor: pointer;
+    font-size: 0.8rem; color: var(--ink-dim); font-family: 'Inter', sans-serif;
+    margin-top: 0.6rem; line-height: 1.4;
+  }
+  .sms-consent input { width: auto; margin-top: 0.15rem; flex-shrink: 0; }
+
   /* Results / instructions screen */
   #results { display: none; }
   .results-head { text-align: center; margin-bottom: 1.5rem; }
@@ -124,6 +131,10 @@
       <div>
         <label for="f-phone">Phone Number</label>
         <input id="f-phone" type="tel" required autocomplete="tel" placeholder="(615) 555-0123">
+        <label class="sms-consent">
+          <input type="checkbox" id="f-sms-consent" required>
+          <span>I agree to receive text messages from Crosshair Creations at this number about my request. Message &amp; data rates may apply, message frequency varies. Reply STOP to opt out, HELP for help.</span>
+        </label>
       </div>
       <div>
         <label for="f-email">Email (optional)</label>
@@ -189,6 +200,10 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
   const phone = document.getElementById('f-phone').value.trim();
   if (!name || !phone) {
     errEl.textContent = 'Name and phone number are required.';
+    return;
+  }
+  if (!document.getElementById('f-sms-consent').checked) {
+    errEl.textContent = 'Please check the box agreeing to receive text updates.';
     return;
   }
   if (!document.getElementById('f-agree').checked) {
