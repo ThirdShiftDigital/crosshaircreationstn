@@ -87,6 +87,11 @@
   }
   .disclaimer-box p { margin: 0 0 0.7rem; }
   .disclaimer-box p:last-of-type { margin-bottom: 0.9rem; }
+  .pricing-box {
+    background: rgba(111, 217, 192, 0.08); border: 1px solid var(--hud); border-radius: 8px;
+    padding: 0.9rem 1.1rem; font-size: 0.88rem; color: var(--ink-dim); margin-top: 0.3rem;
+  }
+  .pricing-box strong { color: var(--ink); }
   .disclaimer-check {
     display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;
     font-size: 0.88rem; color: var(--ink); font-family: 'Inter', sans-serif;
@@ -169,6 +174,10 @@
         <label for="f-details">What's Happening?</label>
         <textarea id="f-details" rows="4" placeholder="e.g. Last seen heading toward the tree line behind the barn about 20 minutes ago"></textarea>
       </div>
+      <div class="pricing-box" id="pricing-box">
+        <p class="tele" style="margin-bottom:0.4rem;">What this typically costs</p>
+        <p style="margin:0;">Daytime: <strong id="price-day-base">$225</strong> first 2 hours, <strong id="price-day-hourly">$185/hr</strong> after. After hours: <strong id="price-night-base">$250</strong> first 2 hours, <strong id="price-night-hourly">$225/hr</strong> after. Same rate for pets and deer. Exact total confirmed when we call.</p>
+      </div>
       <div class="disclaimer-box">
         <p class="tele" style="margin-bottom:0.5rem;">Please read before submitting</p>
         <p><strong>We cannot guarantee an animal will be located or recovered</strong> — success depends on terrain, weather, time elapsed, and animal movement, none of which are in our control. By checking the box below, you agree to pay for the search flight whether or not the animal is found.</p>
@@ -202,6 +211,21 @@
 </footer>
 
 <script>
+// Pull live pricing so this page never drifts out of sync with the dashboard
+fetch('/api/content')
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(data => {
+    const map = {
+      'price-day-base': 'recovery_day_base', 'price-day-hourly': 'recovery_day_hourly',
+      'price-night-base': 'recovery_night_base', 'price-night-hourly': 'recovery_night_hourly',
+    };
+    Object.keys(map).forEach(elId => {
+      const el = document.getElementById(elId);
+      if (el && data[map[elId]] !== undefined) el.textContent = data[map[elId]];
+    });
+  })
+  .catch(() => { /* static fallback values already showing */ });
+
 let selectedType = 'pet';
 document.getElementById('btn-pet').addEventListener('click', () => selectType('pet'));
 document.getElementById('btn-deer').addEventListener('click', () => selectType('deer'));
