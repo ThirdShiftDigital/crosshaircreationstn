@@ -33,6 +33,7 @@ export default async (req: Request, context: Context) => {
   const locationDescription = (body.location_description || "").trim();
   const details = (body.details || "").trim();
   const agreedToDisclaimer = body.agreed_to_disclaimer === true;
+  const smsConsent = body.sms_consent === true;
   const latitude = typeof body.latitude === "number" ? body.latitude : null;
   const longitude = typeof body.longitude === "number" ? body.longitude : null;
 
@@ -49,8 +50,8 @@ export default async (req: Request, context: Context) => {
 
   const db = getDatabase();
   const [row] = await db.sql`
-    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details, agreed_to_disclaimer, latitude, longitude)
-    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null}, ${agreedToDisclaimer}, ${latitude}, ${longitude})
+    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details, agreed_to_disclaimer, latitude, longitude, sms_consent)
+    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null}, ${agreedToDisclaimer}, ${latitude}, ${longitude}, ${smsConsent})
     RETURNING id, created_at
   `;
 

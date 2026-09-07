@@ -36,10 +36,12 @@ async function notifyCustomer(request: any, newStatus: string) {
     }
   }
 
-  // Text — phone is always provided, so this is the more reliable channel
-  const normalizedPhone = normalizeUsPhone(request.phone);
-  if (normalizedPhone) {
-    await sendSms(normalizedPhone, `Crosshair Creations: ${message} Questions? Call/text (615) 549-5067.`);
+  // Text — only if they actually opted in; phone existing isn't consent to text
+  if (request.sms_consent) {
+    const normalizedPhone = normalizeUsPhone(request.phone);
+    if (normalizedPhone) {
+      await sendSms(normalizedPhone, `Crosshair Creations: ${message} Questions? Call/text (615) 549-5067.`);
+    }
   }
 }
 

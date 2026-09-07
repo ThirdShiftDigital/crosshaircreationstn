@@ -681,7 +681,7 @@ async function loadRecovery() {
         <div>
           <strong>${r.recovery_type === 'deer' ? '🦌' : '🐾'} ${esc(r.name)}</strong> — ${esc(r.recovery_type === 'deer' ? 'Deer Recovery' : 'Pet Recovery')}
           <div class="meta">${esc(when)}</div>
-          <div class="meta">${esc(r.phone)} ${r.email ? '· ' + esc(r.email) : ''}</div>
+          <div class="meta">${esc(r.phone)} ${r.email ? '· ' + esc(r.email) : ''} · ${r.sms_consent ? '✅ Opted into texts' : '🚫 Did not opt into texts (call only)'}</div>
           ${r.location_description ? `<div class="meta">📍 ${esc(r.location_description)}</div>` : ''}
           ${r.details ? `<div class="meta">${esc(r.details)}</div>` : ''}
           ${hasPin ? `<div class="meta"><a href="https://www.google.com/maps/dir/?api=1&destination=${r.latitude},${r.longitude}" target="_blank" rel="noopener" style="color:var(--hud); text-decoration:underline;">🗺️ Get Directions</a></div>` : ''}

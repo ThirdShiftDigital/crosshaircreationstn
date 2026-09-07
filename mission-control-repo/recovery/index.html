@@ -152,8 +152,8 @@
         <label for="f-phone">Phone Number</label>
         <input id="f-phone" type="tel" required autocomplete="tel" placeholder="(615) 555-0123">
         <label class="sms-consent">
-          <input type="checkbox" id="f-sms-consent" required>
-          <span>I agree to receive text messages from Crosshair Creations at this number about my request. Message &amp; data rates may apply, message frequency varies. Reply STOP to opt out, HELP for help.</span>
+          <input type="checkbox" id="f-sms-consent">
+          <span>(Optional) I agree to receive text messages from Crosshair Creations at this number about my request. Message &amp; data rates may apply, message frequency varies. Reply STOP to opt out, HELP for help. You can still submit your request and we can still call you without checking this box. See our <a href="/privacy" style="color:var(--ink); text-decoration:underline;">Privacy Policy</a> and <a href="/terms" style="color:var(--ink); text-decoration:underline;">Terms of Service</a>.</span>
         </label>
       </div>
       <div>
@@ -207,7 +207,9 @@
 
 <footer>
   Crosshair Creations — Licensed Part 107 Pilots — Middle Tennessee<br>
-  <a href="/">Back to main site</a>
+  <a href="/">Back to main site</a> &nbsp;·&nbsp;
+  <a href="/privacy">Privacy Policy</a> &nbsp;·&nbsp;
+  <a href="/terms">Terms of Service</a>
 </footer>
 
 <script>
@@ -308,10 +310,6 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
     errEl.textContent = 'Name and phone number are required.';
     return;
   }
-  if (!document.getElementById('f-sms-consent').checked) {
-    errEl.textContent = 'Please check the box agreeing to receive text updates.';
-    return;
-  }
   if (!document.getElementById('f-agree').checked) {
     errEl.textContent = 'Please check the box to agree before submitting.';
     return;
@@ -331,6 +329,7 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
         location_description: document.getElementById('f-location').value.trim(),
         details: document.getElementById('f-details').value.trim(),
         agreed_to_disclaimer: true,
+        sms_consent: document.getElementById('f-sms-consent').checked,
         latitude: pinLat,
         longitude: pinLng,
       }),
