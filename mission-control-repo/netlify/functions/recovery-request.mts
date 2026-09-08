@@ -36,6 +36,7 @@ export default async (req: Request, context: Context) => {
   const smsConsent = body.sms_consent === true;
   const latitude = typeof body.latitude === "number" ? body.latitude : null;
   const longitude = typeof body.longitude === "number" ? body.longitude : null;
+  const ipAddress = context.ip || null;
 
   if (!name || !phone) {
     return new Response(JSON.stringify({ error: "Name and phone number are required." }), {
@@ -50,8 +51,8 @@ export default async (req: Request, context: Context) => {
 
   const db = getDatabase();
   const [row] = await db.sql`
-    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details, agreed_to_disclaimer, latitude, longitude, sms_consent)
-    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null}, ${agreedToDisclaimer}, ${latitude}, ${longitude}, ${smsConsent})
+    INSERT INTO recovery_requests (name, phone, email, recovery_type, location_description, details, agreed_to_disclaimer, latitude, longitude, sms_consent, ip_address)
+    VALUES (${name}, ${phone}, ${email || null}, ${recoveryType}, ${locationDescription || null}, ${details || null}, ${agreedToDisclaimer}, ${latitude}, ${longitude}, ${smsConsent}, ${ipAddress})
     RETURNING id, created_at
   `;
 
