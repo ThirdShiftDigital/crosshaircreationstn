@@ -42,19 +42,107 @@
   .login-box button { width: 100%; padding: 0.8rem; }
   .login-error { color: var(--danger); font-size: 0.85rem; margin-top: 0.8rem; min-height: 1.2em; }
 
-  /* ---- app shell ---- */
+  /* ---- app shell / sidebar layout ---- */
   #app { display: none; }
-  header.top { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid var(--sky-line); flex-wrap: wrap; gap: 0.75rem; }
-  header.top h1 { font-size: 1.6rem; }
-  .tabs { display: flex; gap: 0.4rem; padding: 1rem 1.5rem 0; flex-wrap: wrap; }
-  .tab-btn { background: transparent; }
-  .tab-btn.active { background: var(--sky-mid); border-color: var(--horizon); color: var(--horizon); }
-  main { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+
+  .dash-shell {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 0.9rem; left: 1rem;
+    z-index: 40;
+    background: var(--sky-mid);
+    border: 1px solid var(--sky-line);
+    color: var(--ink);
+    font-size: 1.1rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+  }
+
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--sky-mid);
+    border-right: 1px solid var(--sky-line);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+
+  .sidebar-brand {
+    padding: 1.4rem 1.3rem 1.1rem;
+    border-bottom: 1px solid var(--sky-line);
+  }
+  .sidebar-brand h1 { font-size: 1.5rem; line-height: 1.05; margin-bottom: 0.4rem; }
+  .sidebar-brand .tele { color: var(--horizon); }
+
+  .tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.9rem 0.7rem;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.88rem;
+  }
+  .tab-icon { font-size: 1rem; flex-shrink: 0; }
+  .tab-btn:hover { background: rgba(255,255,255,0.04); }
+  .tab-btn.active { background: rgba(240,168,75,0.1); border-color: var(--horizon); color: var(--horizon); }
+
+  .sidebar-footer {
+    padding: 1rem 1.3rem 1.3rem;
+    border-top: 1px solid var(--sky-line);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .sidebar-footer #logout-btn { width: 100%; }
+
+  main {
+    flex: 1;
+    padding: 2rem 2rem 3rem;
+    max-width: 1000px;
+    min-width: 0;
+  }
   .panel { display: none; }
   .panel.active { display: block; }
 
-  .card { background: var(--sky-mid); border: 1px solid var(--sky-line); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
-  .card h3 { font-size: 1.2rem; margin-bottom: 0.9rem; }
+  @media (max-width: 880px) {
+    .sidebar-toggle { display: block; }
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 30;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    }
+    .sidebar.open { transform: translateX(0); }
+    main { padding: 4rem 1.2rem 3rem; max-width: 100%; }
+  }
+
+  .card { background: var(--sky-mid); border: 1px solid var(--sky-line); border-radius: 10px; padding: 1.5rem; margin-bottom: 1.2rem; }
+  .card h3 { font-size: 1.15rem; margin-bottom: 1.1rem; letter-spacing: 0.02em; }
+  .panel > .card:first-of-type,
+  .panel > h2:first-child + .card { margin-top: 0; }
+  main > .panel > *:first-child { margin-top: 0; }
   .field-row { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; align-items: center; margin-bottom: 0.6rem; }
   .field-row label { font-size: 0.85rem; color: var(--ink-dim); }
   .field-row input { max-width: 140px; }
@@ -103,28 +191,35 @@
 
 <!-- ===== APP ===== -->
 <div id="app">
-  <header class="top">
-    <h1>MISSION CONTROL</h1>
-    <div style="display:flex; align-items:center; gap:1rem;">
-      <span class="tele" id="welcome-name"></span>
-      <button id="logout-btn">Log Out</button>
-    </div>
-  </header>
+  <div class="dash-shell">
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">☰</button>
 
-  <nav class="tabs">
-    <button class="tab-btn active" data-panel="content">Pricing &amp; Content</button>
-    <button class="tab-btn" data-panel="bookings">Bookings</button>
-    <button class="tab-btn" data-panel="leads">Leads</button>
-    <button class="tab-btn" data-panel="tasks">Tasks</button>
-    <button class="tab-btn" data-panel="notes">Notes</button>
-    <button class="tab-btn" data-panel="square">Square Bookings</button>
-    <button class="tab-btn" data-panel="recovery">Recovery Requests</button>
-    <button class="tab-btn" data-panel="team">Team Access</button>
-  </nav>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <h1>MISSION<br>CONTROL</h1>
+        <p class="tele">Crosshair Creations</p>
+      </div>
 
-  <main>
-    <!-- CONTENT / PRICING -->
-    <section class="panel active" id="panel-content">
+      <nav class="tabs">
+        <button class="tab-btn active" data-panel="content"><span class="tab-icon">💲</span> Pricing &amp; Content</button>
+        <button class="tab-btn" data-panel="bookings"><span class="tab-icon">📅</span> Bookings</button>
+        <button class="tab-btn" data-panel="leads"><span class="tab-icon">🎯</span> Leads</button>
+        <button class="tab-btn" data-panel="tasks"><span class="tab-icon">✅</span> Tasks</button>
+        <button class="tab-btn" data-panel="notes"><span class="tab-icon">📝</span> Notes</button>
+        <button class="tab-btn" data-panel="square"><span class="tab-icon">🟩</span> Square Bookings</button>
+        <button class="tab-btn" data-panel="recovery"><span class="tab-icon">🚨</span> Recovery Requests</button>
+        <button class="tab-btn" data-panel="team"><span class="tab-icon">👥</span> Team Access</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="tele" id="welcome-name"></span>
+        <button id="logout-btn">Log Out</button>
+      </div>
+    </aside>
+
+    <main>
+      <!-- CONTENT / PRICING -->
+      <section class="panel active" id="panel-content">
       <div class="card">
         <h3>Real Estate Photography</h3>
         <div class="field-row"><label>Essentials</label><input data-key="re_essentials_price"></div>
@@ -300,7 +395,8 @@
       </div>
       <div class="card"><div id="team-list"></div></div>
     </section>
-  </main>
+    </main>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -386,7 +482,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.panel).classList.add('active');
+    document.getElementById('sidebar').classList.remove('open');
   });
+});
+
+// Mobile sidebar toggle
+document.getElementById('sidebarToggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
 });
 
 // ---- Content / Pricing ----
