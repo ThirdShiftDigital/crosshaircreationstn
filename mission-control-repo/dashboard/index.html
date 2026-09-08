@@ -259,6 +259,13 @@
         <textarea data-key="hero_subtext" rows="3"></textarea>
       </div>
       <button class="primary" id="save-content-btn">Save Changes to Live Site</button>
+
+      <div class="card" style="margin-top:1.5rem;">
+        <h3>Sync to Square</h3>
+        <p class="tele" style="margin-bottom:1rem;">Map a price above to a Square item — saving it here will also update Square automatically. Recovery's hourly rates can't sync (Square only holds one fixed price per item); the base 2-hour rates can.</p>
+        <div id="square-sync-status" class="tele" style="margin-bottom:0.8rem;"></div>
+        <div id="square-sync-list"></div>
+      </div>
     </section>
 
     <!-- BOOKINGS -->
@@ -501,9 +508,79 @@ async function loadContent() {
 document.getElementById('save-content-btn').addEventListener('click', async () => {
   const payload = {};
   document.querySelectorAll('[data-key]').forEach(el => payload[el.dataset.key] = el.value);
-  await api('/content', { method: 'PUT', body: JSON.stringify(payload) });
-  toast('Saved — live site updated');
+  const res = await api('/content', { method: 'PUT', body: JSON.stringify(payload) });
+  const errKeys = res.squareSyncErrors ? Object.keys(res.squareSyncErrors) : [];
+  if (errKeys.length) {
+    toast(`Saved, but ${errKeys.length} Square sync error(s) — check console`);
+    console.error('Square sync errors:', res.squareSyncErrors);
+  } else {
+    toast('Saved — live site updated' + (Object.keys(squareMappings).length ? ' & synced to Square' : ''));
+  }
 });
+
+// ---- Square Sync mapping ----
+const SYNCABLE_PRICE_FIELDS = [
+  { key: 're_essentials_price', label: 'Real Estate — Essentials' },
+  { key: 're_plus_price', label: 'Real Estate — Plus' },
+  { key: 're_premium_price', label: 'Real Estate — Premium' },
+  { key: 'drone_basic_price', label: 'Drone Services — Basic' },
+  { key: 'drone_standard_price', label: 'Drone Services — Standard' },
+  { key: 'drone_commercial_price', label: 'Drone Services — Commercial' },
+  { key: 'construction_monthly_price', label: 'Construction — Monthly Visit' },
+  { key: 'construction_biweekly_price', label: 'Construction — Bi-Weekly' },
+  { key: 'construction_weekly_price', label: 'Construction — Weekly' },
+  { key: 'recovery_day_base', label: 'Recovery — Daytime (first 2 hrs)' },
+  { key: 'recovery_night_base', label: 'Recovery — After Hours (first 2 hrs)' },
+  { key: 'business_essentials_price', label: 'Business — Essentials' },
+  { key: 'business_growth_price', label: 'Business — Growth' },
+  { key: 'business_premium_price', label: 'Business — Premium' },
+];
+let squareMappings = {};
+
+async function loadSquareSync() {
+  const statusEl = document.getElementById('square-sync-status');
+  const listEl = document.getElementById('square-sync-list');
+  statusEl.textContent = 'Loading Square catalog...';
+  try {
+    const res = await fetch(API + '/square-catalog', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.textContent = '';
+      listEl.innerHTML = `<p class="tele" style="color:var(--danger);">${esc(data.error || 'Could not load Square catalog.')}</p>`;
+      return;
+    }
+    squareMappings = data.mappings || {};
+    statusEl.textContent = '';
+    listEl.innerHTML = '';
+    SYNCABLE_PRICE_FIELDS.forEach(field => {
+      const currentMapping = squareMappings[field.key];
+      const row = document.createElement('div');
+      row.className = 'field-row';
+      row.style.gridTemplateColumns = '1fr 2fr';
+      const options = ['<option value="">Not synced</option>']
+        .concat(data.variations.map(v => `<option value="${v.id}" ${currentMapping && currentMapping.square_variation_id === v.id ? 'selected' : ''}>${esc(v.name)}</option>`));
+      row.innerHTML = `
+        <label>${esc(field.label)}</label>
+        <select class="square-map-select" data-key="${field.key}" style="max-width:none;">${options.join('')}</select>
+      `;
+      listEl.appendChild(row);
+    });
+    listEl.querySelectorAll('.square-map-select').forEach(sel => sel.addEventListener('change', async () => {
+      const variationId = sel.value;
+      const variationName = variationId ? sel.options[sel.selectedIndex].textContent : null;
+      await fetch(API + '/square-catalog', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content_key: sel.dataset.key, square_variation_id: variationId, square_variation_name: variationName }),
+        credentials: 'same-origin',
+      });
+      toast(variationId ? 'Mapped — this will sync to Square on save' : 'Sync removed for this field');
+    }));
+  } catch (e) {
+    statusEl.textContent = '';
+    listEl.innerHTML = '<p class="tele" style="color:var(--danger);">Could not reach the dashboard server.</p>';
+  }
+}
 
 // ---- Bookings ----
 async function loadBookings() {
@@ -938,6 +1015,7 @@ function loadAll() {
   loadSquare();
   loadRecovery();
   loadTeam();
+  if (currentUser && (currentUser.is_owner || currentUser.can_edit_content)) loadSquareSync();
 }
 
 // Check session on load
