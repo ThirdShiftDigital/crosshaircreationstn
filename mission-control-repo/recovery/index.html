@@ -300,8 +300,13 @@ document.getElementById('locate-btn').addEventListener('click', () => {
 
 document.getElementById('recovery-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const errEl = document.getElementById('form-error');
   const btn = document.getElementById('submit-btn');
+
+  // Hard guard against double-submission — must be the very first thing checked,
+  // before any validation, so a rapid double-click can never slip two requests through
+  if (btn.disabled) return;
+
+  const errEl = document.getElementById('form-error');
   errEl.textContent = '';
 
   const name = document.getElementById('f-name').value.trim();
