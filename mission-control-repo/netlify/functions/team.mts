@@ -1,7 +1,7 @@
 import type { Context, Config } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
 import { getSessionUser, unauthorized, forbidden } from "./_shared/session.mts";
-import { hashPassword } from "./_shared/password.mts";
+import { hashPassword, validateNewPassword } from "./_shared/password.mts";
 
 const PERMISSION_KEYS = [
   "can_edit_content", "can_edit_bookings", "can_edit_leads",
@@ -35,8 +35,14 @@ export default async (req: Request, context: Context) => {
     const email = (b.email || "").trim().toLowerCase();
     const phone = (b.phone || "").trim();
     const password = b.password || "";
-    if (!name || !email || password.length < 6) {
-      return new Response(JSON.stringify({ error: "Name, email, and a password of at least 6 characters are required." }), {
+    if (!name || !email) {
+      return new Response(JSON.stringify({ error: "Name and email are required." }), {
+        status: 400, headers: { "content-type": "application/json" },
+      });
+    }
+    const passwordProblem = validateNewPassword(password);
+    if (passwordProblem) {
+      return new Response(JSON.stringify({ error: passwordProblem.replace("New password", "Password") }), {
         status: 400, headers: { "content-type": "application/json" },
       });
     }
@@ -69,6 +75,26 @@ export default async (req: Request, context: Context) => {
     }
   }
 
+  // Admin password reset for another team member. Signs them out everywhere.
+  if (req.method === "PUT" && id && url.searchParams.get("action") === "reset-password") {
+    const targetRows = await db.sql`SELECT id, is_owner FROM users WHERE id = ${id}`;
+    if (!targetRows.length) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "content-type": "application/json" } });
+    const target = targetRows[0];
+    if (Number(target.id) === Number(me.id)) {
+      return forbidden("Use Change Password (it asks for your current password) to change your own.");
+    }
+    if (target.is_owner) return forbidden("The owner's password can only be changed by the owner.");
+    const b = await req.json().catch(() => ({}));
+    const problem = validateNewPassword(b.new_password);
+    if (problem) return new Response(JSON.stringify({ error: problem }), { status: 400, headers: { "content-type": "application/json" } });
+    const { hash, salt } = hashPassword(b.new_password);
+    await db.sql`UPDATE users SET password_hash = ${hash}, password_salt = ${salt} WHERE id = ${id}`;
+    const removed = await db.sql`DELETE FROM sessions WHERE user_id = ${id} RETURNING token`;
+    return new Response(JSON.stringify({ ok: true, signed_out_sessions: removed.length }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  }
+
   if (req.method === "PUT" && id) {
     const targetRows = await db.sql`SELECT is_owner FROM users WHERE id = ${id}`;
     if (!targetRows.length) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "content-type": "application/json" } });
@@ -94,7 +120,10 @@ export default async (req: Request, context: Context) => {
     for (const key of PERMISSION_KEYS) perms[key] = !!b[key];
 
     if (b.password) {
+      const problem = validateNewPassword(b.password);
+      if (problem) return new Response(JSON.stringify({ error: problem }), { status: 400, headers: { "content-type": "application/json" } });
       const { hash, salt } = hashPassword(b.password);
+      await db.sql`DELETE FROM sessions WHERE user_id = ${id}`;
       await db.sql`
         UPDATE users SET
           phone = ${phone || null},

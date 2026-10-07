@@ -113,7 +113,7 @@
     flex-direction: column;
     gap: 0.6rem;
   }
-  .sidebar-footer #logout-btn { width: 100%; }
+  .sidebar-footer #logout-btn, .sidebar-footer #change-pw-btn { width: 100%; }
 
   main {
     flex: 1;
@@ -310,6 +310,7 @@
 
       <div class="sidebar-footer">
         <span class="tele" id="welcome-name"></span>
+        <button id="change-pw-btn">Change Password</button>
         <button id="logout-btn">Log Out</button>
       </div>
     </aside>
@@ -487,7 +488,7 @@
             <input id="tm-name" placeholder="Name">
             <input id="tm-email" type="email" placeholder="Email">
           </div>
-          <input id="tm-password" type="password" placeholder="Password (min. 6 characters)">
+          <input id="tm-password" type="password" autocomplete="new-password" placeholder="Password (min. 10 characters)">
           <input id="tm-phone" type="tel" placeholder="Phone (for text alerts, optional) — e.g. (615) 555-0123">
           <div class="perm-grid">
             <label><input type="checkbox" class="tm-perm" value="can_edit_content"> Pricing &amp; Content</label>
@@ -516,6 +517,26 @@
 
 <div class="toast" id="toast"></div>
 <div class="rq-sheet-backdrop" id="rq-sheet" hidden></div>
+
+<!-- CHANGE PASSWORD -->
+<div class="rq-sheet-backdrop" id="pw-sheet" hidden>
+  <form class="rq-sheet-card" id="pw-form" role="dialog" aria-modal="true" aria-label="Change password" style="max-width:440px;">
+    <div class="rq-sheet-head"><h3>Change Password</h3><button type="button" class="rq-sheet-x" id="pw-x" aria-label="Close">✕</button></div>
+    <p class="rq-dim" style="margin:0 0 0.6rem;">At least 10 characters. Changing it signs you out on your other devices.</p>
+    <input type="text" autocomplete="username" id="pw-username" hidden>
+    <label class="tele" for="pw-current">Current password</label>
+    <input type="password" id="pw-current" autocomplete="current-password" required>
+    <label class="tele" for="pw-new">New password</label>
+    <input type="password" id="pw-new" autocomplete="new-password" required>
+    <label class="tele" for="pw-confirm">Confirm new password</label>
+    <input type="password" id="pw-confirm" autocomplete="new-password" required>
+    <div class="form-error rq-sheet-err" id="pw-err"></div>
+    <div class="rq-sheet-actions">
+      <button type="submit" class="primary" id="pw-save">Change Password</button>
+      <button type="button" id="pw-cancel">Cancel</button>
+    </div>
+  </form>
+</div>
 
 <script src="/dashboard/dispatch.js"></script>
 
@@ -608,6 +629,49 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
   currentUser = null;
   if (window.resetRecoveryBoard) window.resetRecoveryBoard();
   showLogin();
+});
+
+// ---- Change password (logged-in user) ----
+function closePwSheet() {
+  document.getElementById('pw-sheet').hidden = true;
+  document.getElementById('pw-form').reset();
+  document.getElementById('pw-err').textContent = '';
+}
+document.getElementById('change-pw-btn').addEventListener('click', () => {
+  document.getElementById('pw-username').value = (currentUser && currentUser.email) || '';
+  document.getElementById('pw-sheet').hidden = false;
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('pw-current').focus();
+});
+document.getElementById('pw-x').addEventListener('click', closePwSheet);
+document.getElementById('pw-cancel').addEventListener('click', closePwSheet);
+document.getElementById('pw-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('pw-err');
+  const btn = document.getElementById('pw-save');
+  const current = document.getElementById('pw-current').value;
+  const next = document.getElementById('pw-new').value;
+  const confirmPw = document.getElementById('pw-confirm').value;
+  err.textContent = '';
+  if (next.length < 10) { err.textContent = 'New password must be at least 10 characters.'; return; }
+  if (next !== confirmPw) { err.textContent = "The new passwords don't match."; return; }
+  if (next === current) { err.textContent = 'New password must be different from the current one.'; return; }
+  btn.disabled = true;
+  try {
+    const res = await fetch(API + '/auth/change-password', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin',
+      body: JSON.stringify({ current_password: current, new_password: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { err.textContent = data.error || 'Could not change your password.'; return; }
+    closePwSheet();
+    const n = data.signed_out_sessions || 0;
+    toast('Password changed.' + (n ? ' Signed out ' + n + ' other session(s).' : ''));
+  } catch (e2) {
+    err.textContent = 'Could not reach the server. Your password was not changed.';
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // Tabs
@@ -1023,8 +1087,16 @@ async function loadTeam() {
           `).join('')}
         </div>
         ${notifyFieldsHtml}
-        <input type="password" class="team-edit-password" placeholder="New password (leave blank to keep current)" style="margin-bottom:0.6rem;">
         <button class="primary team-save-btn" data-id="${u.id}">Save Changes</button>
+        ${currentUser && Number(currentUser.id) === Number(u.id) ? '' : `
+        <div class="team-reset" style="margin-top:1rem; padding-top:0.8rem; border-top:1px dashed var(--sky-line);">
+          <p class="tele" style="margin:0 0 0.4rem;">Reset password (signs them out everywhere)</p>
+          <div class="row2" style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+            <input type="password" class="team-reset-new" autocomplete="new-password" placeholder="New password (10+ characters)">
+            <input type="password" class="team-reset-confirm" autocomplete="new-password" placeholder="Confirm new password">
+          </div>
+          <button class="team-reset-btn" data-id="${u.id}" style="margin-top:0.5rem;">Reset Password</button>
+        </div>`}
       </div>`;
 
     div.innerHTML = `
@@ -1056,6 +1128,20 @@ async function loadTeam() {
     if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
   }));
 
+  el.querySelectorAll('.team-reset-btn').forEach(btn => btn.addEventListener('click', async () => {
+    const box = btn.closest('.team-reset');
+    const pw = box.querySelector('.team-reset-new').value;
+    const confirmPw = box.querySelector('.team-reset-confirm').value;
+    if (pw.length < 10) return toast('New password must be at least 10 characters');
+    if (pw !== confirmPw) return toast("The two passwords don't match");
+    if (!confirm('Reset this password? They will be signed out on every device and need the new password to log in.')) return;
+    const res = await api('/team?id=' + btn.dataset.id + '&action=reset-password', { method: 'PUT', body: JSON.stringify({ new_password: pw }) });
+    if (res.error) return toast(res.error);
+    box.querySelector('.team-reset-new').value = '';
+    box.querySelector('.team-reset-confirm').value = '';
+    toast('Password reset. Signed out of ' + (res.signed_out_sessions || 0) + ' session(s).');
+  }));
+
   el.querySelectorAll('.team-save-btn').forEach(btn => btn.addEventListener('click', async () => {
     const id = btn.dataset.id;
     const form = btn.closest('.team-edit-form');
@@ -1064,11 +1150,6 @@ async function loadTeam() {
     form.querySelectorAll('.team-edit-notify').forEach(cb => payload[cb.value] = cb.checked);
     const phoneInput = form.querySelector('.team-edit-phone');
     if (phoneInput) payload.phone = phoneInput.value.trim();
-    const passwordInput = form.querySelector('.team-edit-password');
-    if (passwordInput && passwordInput.value) {
-      if (passwordInput.value.length < 6) return toast('New password must be at least 6 characters');
-      payload.password = passwordInput.value;
-    }
     const res = await api('/team?id=' + id, { method: 'PUT', body: JSON.stringify(payload) });
     if (res.error) return toast(res.error);
     toast('Saved');
@@ -1080,7 +1161,7 @@ document.getElementById('add-team-btn').addEventListener('click', async () => {
   const email = document.getElementById('tm-email').value.trim();
   const password = document.getElementById('tm-password').value;
   const phone = document.getElementById('tm-phone').value.trim();
-  if (!name || !email || password.length < 6) return toast('Name, email, and a 6+ character password are required');
+  if (!name || !email || password.length < 10) return toast('Name, email, and a 10+ character password are required');
   const payload = { name, email, password, phone };
   document.querySelectorAll('.tm-perm').forEach(cb => payload[cb.value] = cb.checked);
   document.querySelectorAll('.tm-notify').forEach(cb => payload[cb.value] = cb.checked);
