@@ -1,6 +1,21 @@
+# Only the files in public/ are published to the CDN. Function source,
+# database migrations, package.json and this file stay private.
 [build]
-  publish = "."
+  publish = "public"
   command = "npm install"
 
 [functions]
   directory = "netlify/functions"
+
+# Keep the staff dashboard out of search engines.
+[[headers]]
+  for = "/dashboard/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
