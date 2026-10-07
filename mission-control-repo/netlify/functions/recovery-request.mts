@@ -41,9 +41,12 @@ function siteBaseUrl(req: Request, context: Context): string {
 async function sendNotifications(row: any, instructions: string[], baseUrl: string) {
   const type = row.recovery_type === "deer" ? "deer" : "pet";
   const typeTitle = type === "deer" ? "Deer" : "Pet";
-  const mapLink = (row.latitude !== null && row.longitude !== null)
-    ? `\n\nGet directions: https://www.google.com/maps/dir/?api=1&destination=${row.latitude},${row.longitude}`
-    : "";
+  const hasPin = row.latitude !== null && row.longitude !== null;
+  const base = baseUrl || "https://crosshaircreationstn.com";
+  // With a GPS pin, lead with directions; the typed text is just notes/landmarks.
+  const alertBody = hasPin
+    ? `New recovery request just came in.\n\n📍 GPS pin — directions: https://www.google.com/maps/dir/?api=1&destination=${row.latitude},${row.longitude}\n\nName: ${row.name}\nPhone: ${row.phone}\nEmail: ${row.email || "not provided"}\nType: ${typeTitle} Recovery\nNotes: ${row.location_description || "none"}\nDetails: ${row.details || "none"}\n\nView it in Mission Control: ${base}/dashboard`
+    : `New recovery request just came in.\n\nName: ${row.name}\nPhone: ${row.phone}\nEmail: ${row.email || "not provided"}\nType: ${typeTitle} Recovery\nLocation: ${row.location_description || "not provided"}\nDetails: ${row.details || "none"}\n\nView it in Mission Control: ${base}/dashboard`;
 
   const tasks: Promise<unknown>[] = [];
 
@@ -51,7 +54,7 @@ async function sendNotifications(row: any, instructions: string[], baseUrl: stri
   tasks.push(notifyOptedInUsers(
     "recovery",
     `🚨 New ${typeTitle} Recovery Request — ${row.name}`,
-    `New recovery request just came in.\n\nName: ${row.name}\nPhone: ${row.phone}\nEmail: ${row.email || "not provided"}\nType: ${typeTitle} Recovery\nLocation: ${row.location_description || "not provided"}\nDetails: ${row.details || "none"}${mapLink}\n\nView it in Mission Control: ${baseUrl || "https://crosshaircreationstn.com"}/dashboard`,
+    alertBody,
     { requestId: row.id, baseUrl },
   ));
 
@@ -136,10 +139,11 @@ export default async (req: Request, context: Context) => {
 
   if (existing) {
     // Keep anything new the customer typed, but don't create a second job or re-alert everyone.
+    const pinned = latitude !== null && longitude !== null;
     const extra = [
-      locationDescription && `Location: ${locationDescription}`,
+      pinned && `Pin: ${latitude}, ${longitude}`,
+      locationDescription && `${pinned ? "Notes" : "Location"}: ${locationDescription}`,
       details && `Details: ${details}`,
-      latitude !== null && longitude !== null && `Pin: ${latitude}, ${longitude}`,
     ].filter(Boolean).join("\n");
     try {
       await db.sql`

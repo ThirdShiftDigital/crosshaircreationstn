@@ -70,6 +70,16 @@
   }
   .map-hint { margin: 0.5rem 0 0; text-align: center; }
   .map-hint.set { color: var(--hud); }
+  .pin-confirm {
+    margin: 0 0 0.5rem; padding: 0.6rem 0.8rem; border-radius: 8px; font-size: 0.9rem;
+    background: rgba(111,217,192,0.08); border: 1px solid var(--hud); color: var(--hud);
+  }
+  .remove-pin {
+    display: block; margin: 0.4rem auto 0; background: none; border: none; padding: 0.3rem;
+    color: var(--ink-dim); text-decoration: underline; font-size: 0.85rem; cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+  [hidden] { display: none !important; }
 
   .submit-btn {
     width: 100%; padding: 1.1rem; border: none; border-radius: 10px; margin-top: 0.5rem;
@@ -160,15 +170,21 @@
         <label for="f-email">Email (optional)</label>
         <input id="f-email" type="email" autocomplete="email">
       </div>
-      <div>
+      <div id="location-field">
         <label for="f-location">Location / Address</label>
-        <input id="f-location" placeholder="Address, crossroads, or landmark">
+        <input id="f-location" name="recovery-place" autocomplete="off" autocapitalize="sentences" placeholder="Address, crossroads, or landmark">
+      </div>
+      <div id="landmarks-field" hidden>
+        <p class="pin-confirm" id="pin-confirm" role="status">📍 Pin set — we'll use your GPS location.</p>
+        <label for="f-landmarks">Landmarks or notes (optional)</label>
+        <input id="f-landmarks" name="recovery-landmark" autocomplete="off" autocapitalize="sentences" placeholder="e.g., last blood near the creek, past the green gate">
       </div>
       <div>
         <label>Pin Your Exact Location (optional but helps a lot)</label>
         <button type="button" class="locate-btn" id="locate-btn">📍 Use My Current Location</button>
         <div id="map" class="map-box"></div>
         <p class="map-hint tele" id="map-hint">Tap the map to place or adjust a pin</p>
+        <button type="button" class="remove-pin" id="remove-pin" hidden>Remove pin</button>
       </div>
       <div>
         <label for="f-details">What's Happening?</label>
@@ -249,9 +265,41 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
 }).addTo(map);
 
+// With a GPS pin we don't want a typed or browser-autofilled street address
+// (autofill tends to drop in the customer's home address). The address box is
+// cleared and swapped for an optional landmarks/notes box; removing the pin
+// brings the address box back.
+function showPinnedLocationFields(pinned) {
+  const locField = document.getElementById('location-field');
+  const lmField = document.getElementById('landmarks-field');
+  const loc = document.getElementById('f-location');
+  const lm = document.getElementById('f-landmarks');
+  if (pinned) {
+    if (!locField.hidden) loc.value = '';
+    locField.hidden = true;
+    lmField.hidden = false;
+  } else {
+    // Keep anything they typed as landmarks so it isn't lost.
+    if (!lmField.hidden && lm.value.trim() && !loc.value.trim()) loc.value = lm.value.trim();
+    lm.value = '';
+    lmField.hidden = true;
+    locField.hidden = false;
+  }
+  document.getElementById('remove-pin').hidden = !pinned;
+}
+
+function clearPin() {
+  if (marker) { map.removeLayer(marker); marker = null; }
+  pinLat = null;
+  pinLng = null;
+  showPinnedLocationFields(false);
+  updateMapHint();
+}
+
 function setPin(lat, lng, zoom) {
   pinLat = lat;
   pinLng = lng;
+  showPinnedLocationFields(true);
   if (marker) {
     marker.setLatLng([lat, lng]);
   } else {
@@ -260,6 +308,7 @@ function setPin(lat, lng, zoom) {
       const pos = marker.getLatLng();
       pinLat = pos.lat;
       pinLng = pos.lng;
+      showPinnedLocationFields(true);
       updateMapHint();
     });
   }
@@ -270,7 +319,7 @@ function setPin(lat, lng, zoom) {
 function updateMapHint() {
   const hint = document.getElementById('map-hint');
   if (pinLat !== null) {
-    hint.textContent = 'Pin set — drag it to fine-tune, or tap elsewhere to move it';
+    hint.textContent = 'Drag the pin to fine-tune, or tap elsewhere to move it';
     hint.classList.add('set');
   } else {
     hint.textContent = 'Tap the map to place a pin';
@@ -281,6 +330,8 @@ function updateMapHint() {
 map.on('click', (e) => {
   setPin(e.latlng.lat, e.latlng.lng);
 });
+
+document.getElementById('remove-pin').addEventListener('click', clearPin);
 
 document.getElementById('locate-btn').addEventListener('click', () => {
   const hint = document.getElementById('map-hint');
@@ -367,11 +418,16 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
 
   const email = document.getElementById('f-email').value.trim();
   const smsConsent = document.getElementById('f-sms-consent').checked;
+  const hasPin = pinLat !== null && pinLng !== null;
+  // With a pin, only the landmarks/notes box is sent, never the address box.
+  const locationText = hasPin
+    ? document.getElementById('f-landmarks').value.trim()
+    : document.getElementById('f-location').value.trim();
   const result = await sendRecoveryRequest({
     submission_id: SUBMISSION_ID,
     name, phone, email,
     recovery_type: selectedType,
-    location_description: document.getElementById('f-location').value.trim(),
+    location_description: locationText,
     details: document.getElementById('f-details').value.trim(),
     agreed_to_disclaimer: true,
     sms_consent: smsConsent,

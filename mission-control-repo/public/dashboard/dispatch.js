@@ -178,7 +178,10 @@
     }
     list.innerHTML = rows.map(r => {
       const unseen = isUnseen(r);
-      const where = r.location_description ? esc(r.location_description) : (r.latitude != null ? 'Pin dropped on map' : 'No location given');
+      const pinned = r.latitude != null && r.longitude != null;
+      const where = pinned
+        ? 'GPS pin' + (r.location_description ? ' · ' + esc(r.location_description) : '')
+        : (r.location_description ? esc(r.location_description) : 'No location given');
       const pilotLine = r.assigned_pilot ? ' · 🧑‍✈️ ' + esc(r.assigned_pilot) + (r.eta_text ? ' · ETA ' + esc(r.eta_text) : '') : '';
       return '<button class="rq-item rb-' + esc(r.status) + (unseen ? ' unseen' : '') + '" data-id="' + r.id + '">' +
         '<div class="rq-item-top">' +
@@ -300,7 +303,7 @@
         '<div class="rq-dim">' + (r.recovery_type === 'deer' ? 'Deer recovery' : 'Pet recovery') + ' · submitted ' + esc(fmtTime(r.created_at)) + ' (' + esc(ago(r.created_at)) + ')</div>' +
         '<div class="rq-quick">' +
           '<a class="rq-btn-link primary-link" href="tel:' + esc(String(r.phone || '').replace(/[^\d+]/g, '')) + '">📞 Call ' + esc(prettyPhone(r.phone)) + '</a>' +
-          (dirUrl ? '<a class="rq-btn-link" target="_blank" rel="noopener" href="' + esc(dirUrl) + '">🗺️ Directions</a>' : '') +
+          (dirUrl ? '<a class="rq-btn-link" target="_blank" rel="noopener" href="' + esc(dirUrl) + '">🗺️ ' + (hasPin ? 'Directions to pin' : 'Directions') + '</a>' : '') +
           '<button class="rq-msg-btn">✉️ Message customer</button>' +
         '</div>' +
       '</div>' +
@@ -319,7 +322,11 @@
           '<div class="rq-kv-k">Phone</div><div class="rq-kv-v"><a href="tel:' + esc(String(r.phone || '').replace(/[^\d+]/g, '')) + '">' + esc(prettyPhone(r.phone)) + '</a></div>' +
           '<div class="rq-kv-k">Texts</div><div class="rq-kv-v">' + (ch.sms.available ? '✅ Opted in to texts' : '🚫 ' + esc(ch.sms.reason || 'Not available') + ' (call only)') + '</div>' +
           '<div class="rq-kv-k">Email</div><div class="rq-kv-v">' + (r.email ? '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '<span class="rq-dim">Not provided</span>') + '</div>' +
-          '<div class="rq-kv-k">Location</div><div class="rq-kv-v">' + (r.location_description ? esc(r.location_description) : '<span class="rq-dim">Not provided</span>') + (hasPin ? '<br><span class="rq-dim">Pin: ' + Number(r.latitude).toFixed(5) + ', ' + Number(r.longitude).toFixed(5) + '</span>' : '') + '</div>' +
+          // With a GPS pin the pin is the location; the typed text is notes/landmarks.
+          (hasPin
+            ? '<div class="rq-kv-k">GPS pin</div><div class="rq-kv-v"><a target="_blank" rel="noopener" href="' + esc(dirUrl) + '">📍 ' + Number(r.latitude).toFixed(5) + ', ' + Number(r.longitude).toFixed(5) + '</a> <span class="rq-dim">(directions)</span></div>' +
+              '<div class="rq-kv-k">Notes</div><div class="rq-kv-v">' + (r.location_description ? esc(r.location_description) : '<span class="rq-dim">None</span>') + '</div>'
+            : '<div class="rq-kv-k">Location</div><div class="rq-kv-v">' + (r.location_description ? esc(r.location_description) : '<span class="rq-dim">Not provided</span>') + '</div>') +
           '<div class="rq-kv-k">Details</div><div class="rq-kv-v rq-pre">' + (r.details ? esc(r.details) : '<span class="rq-dim">None</span>') + '</div>' +
           (r.ip_address ? '<div class="rq-kv-k">IP</div><div class="rq-kv-v rq-dim">' + esc(r.ip_address) + '</div>' : '') +
         '</div>' +
