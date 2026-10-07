@@ -427,7 +427,18 @@ async function api(path, opts = {}) {
 
 let currentUser = null;
 
+// Each loader only renders its newest response, so overlapping loads (double-clicked
+// Refresh, auto-refresh landing mid-load, a second login answer) can't show items twice.
+const loadSeq = {};
+function beginLoad(key) {
+  const id = (loadSeq[key] = (loadSeq[key] || 0) + 1);
+  return () => loadSeq[key] === id;
+}
+let appStarted = false;
+let loginInFlight = false;
+
 function showLogin() {
+  appStarted = false;
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
 }
@@ -436,6 +447,8 @@ function showApp(user) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   applyPermissions();
+  if (appStarted) return; // already loaded; don't run every loader a second time
+  appStarted = true;
   loadAll();
 }
 
@@ -465,15 +478,18 @@ document.getElementById('password-input').addEventListener('keydown', e => { if 
 document.getElementById('email-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 async function doLogin() {
+  if (loginInFlight) return;
   const email = document.getElementById('email-input').value.trim();
   const password = document.getElementById('password-input').value;
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
+  loginInFlight = true;
   try {
     const res = await fetch(API + '/auth/login', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ email, password }), credentials: 'same-origin' });
     const data = await res.json();
     if (res.ok) { showApp(data.user); } else { errEl.textContent = data.error || 'Incorrect email or password.'; }
   } catch (e) { errEl.textContent = 'Something went wrong. Try again.'; }
+  finally { loginInFlight = false; }
 }
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -500,7 +516,9 @@ document.getElementById('sidebarToggle').addEventListener('click', () => {
 
 // ---- Content / Pricing ----
 async function loadContent() {
+  const current = beginLoad('content');
   const data = await api('/content');
+  if (!current()) return;
   document.querySelectorAll('[data-key]').forEach(el => {
     if (data[el.dataset.key] !== undefined) el.value = data[el.dataset.key];
   });
@@ -541,9 +559,11 @@ async function loadSquareSync() {
   const statusEl = document.getElementById('square-sync-status');
   const listEl = document.getElementById('square-sync-list');
   statusEl.textContent = 'Loading Square catalog...';
+  const current = beginLoad('squareSync');
   try {
     const res = await fetch(API + '/square-catalog', { credentials: 'same-origin' });
     const data = await res.json();
+    if (!current()) return;
     if (!res.ok) {
       statusEl.textContent = '';
       listEl.innerHTML = `<p class="tele" style="color:var(--danger);">${esc(data.error || 'Could not load Square catalog.')}</p>`;
@@ -584,7 +604,9 @@ async function loadSquareSync() {
 
 // ---- Bookings ----
 async function loadBookings() {
+  const current = beginLoad('bookings');
   const rows = await api('/bookings');
+  if (!current()) return;
   const el = document.getElementById('bookings-list');
   el.innerHTML = rows.length ? '' : '<p class="tele">No bookings yet.</p>';
   rows.forEach(b => {
@@ -627,7 +649,9 @@ document.getElementById('add-booking-btn').addEventListener('click', async () =>
 
 // ---- Leads ----
 async function loadLeads() {
+  const current = beginLoad('leads');
   const rows = await api('/leads');
+  if (!current()) return;
   const el = document.getElementById('leads-list');
   el.innerHTML = rows.length ? '' : '<p class="tele">No leads yet.</p>';
   rows.forEach(l => {
@@ -667,7 +691,9 @@ document.getElementById('add-lead-btn').addEventListener('click', async () => {
 
 // ---- Tasks ----
 async function loadTasks() {
+  const current = beginLoad('tasks');
   const rows = await api('/tasks');
+  if (!current()) return;
   const el = document.getElementById('tasks-list');
   el.innerHTML = rows.length ? '' : '<p class="tele">No tasks yet.</p>';
   rows.forEach(t => {
@@ -698,7 +724,9 @@ document.getElementById('add-task-btn').addEventListener('click', async () => {
 
 // ---- Notes ----
 async function loadNotes() {
+  const current = beginLoad('notes');
   const rows = await api('/notes');
+  if (!current()) return;
   const el = document.getElementById('notes-list');
   el.innerHTML = rows.length ? '' : '<p class="tele">No notes yet.</p>';
   rows.forEach(n => {
@@ -735,10 +763,12 @@ async function loadSquare() {
   const statusEl = document.getElementById('square-status');
   const listEl = document.getElementById('square-list');
   statusEl.textContent = 'Loading from Square...';
-  listEl.innerHTML = '';
+  const current = beginLoad('square');
   try {
     const res = await fetch(API + '/square-bookings', { credentials: 'same-origin' });
     const data = await res.json();
+    if (!current()) return;
+    listEl.innerHTML = '';
     if (!res.ok) {
       statusEl.textContent = '';
       listEl.innerHTML = `<p class="tele" style="color:var(--danger);">${esc(data.error || 'Something went wrong reaching Square.')}</p>`;
@@ -836,10 +866,12 @@ async function loadRecovery() {
   const statusEl = document.getElementById('recovery-status');
   const listEl = document.getElementById('recovery-list');
   statusEl.textContent = 'Loading...';
-  listEl.innerHTML = '';
+  const current = beginLoad('recovery');
   try {
     const res = await fetch(API + '/recovery-requests', { credentials: 'same-origin' });
     const data = await res.json();
+    if (!current()) return;
+    listEl.innerHTML = '';
     if (!res.ok) {
       statusEl.textContent = '';
       listEl.innerHTML = `<p class="tele" style="color:var(--danger);">${esc(data.error || 'Something went wrong.')}</p>`;
@@ -903,7 +935,9 @@ const NOTIFY_LABELS = {
 };
 async function loadTeam() {
   if (!currentUser || !(currentUser.is_owner || currentUser.can_manage_team)) return;
+  const current = beginLoad('team');
   const rows = await api('/team');
+  if (!current()) return;
   const el = document.getElementById('team-list');
   el.innerHTML = '';
   rows.forEach(u => {
