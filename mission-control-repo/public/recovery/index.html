@@ -200,7 +200,7 @@
     <ul class="instructions-list" id="instructions-list"></ul>
     <div class="callback-note">
       <p class="tele">What happens next</p>
-      <p>We'll call the number you gave us to confirm details and get moving. Keep your phone nearby.</p>
+      <p id="next-steps-text">We'll call the number you gave us to confirm details and get moving. Keep your phone nearby.</p>
     </div>
   </div>
 </div>
@@ -298,13 +298,54 @@ document.getElementById('locate-btn').addEventListener('click', () => {
   );
 });
 
+// One id per form load. Every retry of this form reuses it, so the server can
+// recognise a repeat (double tap, flaky signal, "try again") and never create a
+// second request for the same emergency.
+function makeSubmissionId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  const rnd = (window.crypto && window.crypto.getRandomValues)
+    ? Array.from(window.crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
+    : (Date.now().toString(16) + Math.random().toString(16).slice(2)).padEnd(32, '0');
+  return [rnd.slice(0, 8), rnd.slice(8, 12), rnd.slice(12, 16), rnd.slice(16, 20), rnd.slice(20, 32)].join('-');
+}
+const SUBMISSION_ID = makeSubmissionId();
+let submitting = false;
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Sends the request, retrying network hiccups and server errors with the same
+// submission id (safe: the server returns the original request on a repeat).
+async function sendRecoveryRequest(payload) {
+  const delays = [0, 1500, 3500];
+  let lastProblem = 'network';
+  for (const delay of delays) {
+    if (delay) await sleep(delay);
+    let res;
+    try {
+      res = await fetch('/api/recovery-request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      lastProblem = 'network';
+      continue;
+    }
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (res.ok && data && data.ok) return { ok: true, data };
+    if (res.status >= 400 && res.status < 500 && data && data.error) {
+      return { ok: false, validation: true, error: data.error };
+    }
+    lastProblem = 'server';
+  }
+  return { ok: false, validation: false, problem: lastProblem };
+}
+
 document.getElementById('recovery-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('submit-btn');
-
-  // Hard guard against double-submission — must be the very first thing checked,
-  // before any validation, so a rapid double-click can never slip two requests through
-  if (btn.disabled) return;
+  if (submitting) return;
 
   const errEl = document.getElementById('form-error');
   errEl.textContent = '';
@@ -320,49 +361,55 @@ document.getElementById('recovery-form').addEventListener('submit', async (e) =>
     return;
   }
 
+  submitting = true;
   btn.disabled = true;
   btn.textContent = 'Sending...';
 
-  try {
-    const res = await fetch('/api/recovery-request', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name, phone,
-        email: document.getElementById('f-email').value.trim(),
-        recovery_type: selectedType,
-        location_description: document.getElementById('f-location').value.trim(),
-        details: document.getElementById('f-details').value.trim(),
-        agreed_to_disclaimer: true,
-        sms_consent: document.getElementById('f-sms-consent').checked,
-        latitude: pinLat,
-        longitude: pinLng,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      errEl.textContent = data.error || 'Something went wrong. Please call us instead: (615) 549-5067';
-      btn.disabled = false;
-      btn.textContent = 'Send Request';
-      return;
-    }
+  const email = document.getElementById('f-email').value.trim();
+  const smsConsent = document.getElementById('f-sms-consent').checked;
+  const result = await sendRecoveryRequest({
+    submission_id: SUBMISSION_ID,
+    name, phone, email,
+    recovery_type: selectedType,
+    location_description: document.getElementById('f-location').value.trim(),
+    details: document.getElementById('f-details').value.trim(),
+    agreed_to_disclaimer: true,
+    sms_consent: smsConsent,
+    latitude: pinLat,
+    longitude: pinLng,
+  });
 
-    const list = document.getElementById('instructions-list');
-    list.innerHTML = '';
-    (data.instructions || []).forEach(text => {
-      const li = document.createElement('li');
-      li.textContent = text;
-      list.appendChild(li);
-    });
-
-    document.getElementById('form-screen').style.display = 'none';
-    document.getElementById('results').style.display = 'block';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch (err) {
-    errEl.textContent = 'Could not send your request. Please call us instead: (615) 549-5067';
+  if (!result.ok) {
+    submitting = false;
     btn.disabled = false;
-    btn.textContent = 'Send Request';
+    btn.textContent = 'Try Again';
+    errEl.innerHTML = result.validation
+      ? ''
+      : 'We couldn\'t confirm your request went through. Please call us now at <a href="tel:+16155495067" style="color:inherit;">(615) 549-5067</a> so we don\'t miss you. Tapping "Try Again" is safe and won\'t send a duplicate.';
+    if (result.validation) errEl.textContent = result.error;
+    return;
   }
+
+  const data = result.data;
+  const list = document.getElementById('instructions-list');
+  list.innerHTML = '';
+  (data.instructions || []).forEach(text => {
+    const li = document.createElement('li');
+    li.textContent = text;
+    list.appendChild(li);
+  });
+
+  const updates = [];
+  if (smsConsent) updates.push('text');
+  if (email) updates.push('email');
+  let next = "We'll call the number you gave us to confirm details and get moving. Keep your phone nearby.";
+  if (updates.length) next += ` You'll also get updates by ${updates.join(' and ')}.`;
+  if (data.duplicate) next = "We already have your request, so there's no need to send it again. " + next;
+  document.getElementById('next-steps-text').textContent = next;
+
+  document.getElementById('form-screen').style.display = 'none';
+  document.getElementById('results').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 </script>
 
