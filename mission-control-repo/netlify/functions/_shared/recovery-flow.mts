@@ -34,8 +34,10 @@ export const CUSTOMER_TEMPLATES: Record<string, string> = {
   assigned: "{pilot} is assigned to your {animal} recovery.{eta} We'll let you know when they're on the way.",
   en_route: "{pilot} is on the way to you now.{eta}",
   on_scene: "{pilot} is on site and the thermal search has started. We'll update you as soon as we know more.",
-  found: "Good news: we've located your {animal}. {pilot} will walk you through next steps.",
-  not_found: "We weren't able to locate your {animal} on this search. {pilot} will go over the area we covered and any next steps with you.",
+  // Found / Not found defaults depend on the request type (deer vs pet) and
+  // live in public/dashboard/dispatch.js (OUTCOME_TEMPLATES).
+  found: "",
+  not_found: "",
   closed: "Your recovery request is now closed. Thank you for trusting Crosshair Creations.",
 };
 

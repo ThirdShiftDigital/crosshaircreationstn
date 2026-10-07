@@ -30,6 +30,26 @@
   const rank = (s) => (RANK[s] === undefined ? 0 : RANK[s]);
   const animal = (r) => (r.recovery_type === 'deer' ? 'deer' : 'pet');
 
+  // Default Found / Not found messages, picked by request type. Anything that
+  // isn't a deer request (including old or unknown types) uses the pet wording,
+  // matching animal() above. "Crosshair Creations: " and the STOP line are added
+  // by formatSms, so they are not part of these bodies.
+  const OUTCOME_TEMPLATES = {
+    deer: {
+      found: "Good news, we found your deer. We've marked the location and will send you the pin now. Congrats on the harvest.",
+      not_found: "We searched the area thoroughly but weren't able to locate your deer this time. Thank you for trusting us with your recovery. We truly appreciate the opportunity. If you end up finding it, please let us know, because we love hearing success stories.",
+    },
+    pet: {
+      found: "Great news, we've located your pet. We'll guide you to them now. Stay calm and approach slowly so they don't spook.",
+      not_found: "We weren't able to locate your pet on this search, and we're so sorry. Keep food, water, and something with your scent outside, and call us if they're spotted. Thank you for trusting us. When they make it home, please let us know, because we love a happy ending.",
+    },
+  };
+  function defaultTemplate(r, toStatus, serverTemplates) {
+    const byType = OUTCOME_TEMPLATES[animal(r)] || OUTCOME_TEMPLATES.pet;
+    if (byType[toStatus]) return byType[toStatus];
+    return (serverTemplates || {})[toStatus] || '';
+  }
+
   // currentUser is a top-level `let` in the main dashboard script.
   function me() {
     try { return typeof currentUser === 'undefined' ? null : currentUser; } catch (e) { return null; }
@@ -403,7 +423,7 @@
     const needsPilot = toStatus === 'assigned' || toStatus === 'en_route';
     const needsHours = toStatus === 'closed';
     const defaultPilot = r.assigned_pilot || (me() && me().name) || '';
-    const tpl = isMessageOnly ? '' : (templates[toStatus] || '');
+    const tpl = isMessageOnly ? '' : defaultTemplate(r, toStatus, templates);
     const anyChannel = ch.sms.available || ch.email.available;
 
     const title = isMessageOnly ? 'Message customer' : (backward ? 'Move back to: ' : 'Mark as: ') + label(toStatus);
